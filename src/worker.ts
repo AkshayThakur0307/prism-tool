@@ -1,11 +1,13 @@
-
+// Use any for Env to avoid strict Fetcher type issues if not fully configured
 export interface Env {
-    ASSETS: Fetcher;
+    ASSETS: {
+        fetch: (request: Request) => Promise<Response>;
+    };
     VITE_JIRA_DOMAIN: string;
 }
 
 export default {
-    async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    async fetch(request: Request, env: Env, ctx: any): Promise<Response> {
         const url = new URL(request.url);
 
         // Proxy Jira API requests

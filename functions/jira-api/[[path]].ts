@@ -1,4 +1,5 @@
-export const onRequest: PagesFunction<{ VITE_JIRA_DOMAIN: string }> = async (context) => {
+// Cloudflare Pages Function handler
+export const onRequest = async (context: { request: Request; env: { VITE_JIRA_DOMAIN: string } }) => {
     const { request, env } = context;
     const url = new URL(request.url);
 
