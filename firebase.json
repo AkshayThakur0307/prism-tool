@@ -8,28 +8,9 @@
         ],
         "rewrites": [
             {
-                "source": "/jira-api/**",
-                "function": "jiraProxy"
-            },
-            {
                 "source": "**",
                 "destination": "/index.html"
             }
         ]
-    },
-    "functions": [
-        {
-            "source": "functions",
-            "codebase": "default",
-            "ignore": [
-                "node_modules",
-                ".git",
-                "firebase-debug.log",
-                "firebase-debug.*.log"
-            ],
-            "predeploy": [
-                "npm --prefix \"$RESOURCE_DIR\" run build"
-            ]
-        }
-    ]
+    }
 }
