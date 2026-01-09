@@ -27,8 +27,9 @@ export const jiraService = {
      * Note: We use a proxy logic if needed, but for now we'll attempt direct with proper headers
      */
     createIssue: async (config: JiraConfig, summary: string, description: string, issueType: 'Epic' | 'Story' | 'Task' = 'Story', parentKey?: string): Promise<JiraIssueResponse> => {
-        // Use the local Vite proxy path defined in vite.config.ts
-        const url = `/jira-api/rest/api/3/issue`;
+        // Use the Cloudflare Worker proxy if configured, otherwise local Vite proxy
+        const proxyBase = (import.meta.env.VITE_JIRA_PROXY_URL as string) || '/jira-api';
+        const url = `${proxyBase.replace(/\/$/, '')}/rest/api/3/issue`;
 
         // Jira strictly enforces a 255 character limit for summaries
         const safeSummary = summary.substring(0, 250);
