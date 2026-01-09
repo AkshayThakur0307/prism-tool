@@ -4,6 +4,7 @@ import { DiscoveryStage, AppState, FileContext, VoiceState, GroundingSource, Pro
 import { STAGE_CONFIGS } from './constants';
 import { callGroqAgent } from './services/groqService';
 import { scrapeUrl } from './services/webScraper';
+import { jiraService } from './services/jiraService';
 import { GroqVoiceAssistant } from './services/groqVoiceService';
 import MarkdownRenderer from './components/MarkdownRenderer';
 import PresentationView from './components/PresentationView';
@@ -45,6 +46,17 @@ const App: React.FC = () => {
   const [showHistory, setShowHistory] = useState(false);
   const [showManual, setShowManual] = useState(false);
   const [urlInput, setUrlInput] = useState('');
+
+  // Jira State
+  const [showJiraSync, setShowJiraSync] = useState(false);
+  const [isJiraSyncing, setIsJiraSyncing] = useState(false);
+  const [jiraSyncProgress, setJiraSyncProgress] = useState('');
+  const [jiraConfig, setJiraConfig] = useState({
+    domain: (process.env as any).VITE_JIRA_DOMAIN || '',
+    email: (process.env as any).VITE_JIRA_EMAIL || '',
+    apiToken: (process.env as any).VITE_JIRA_API_TOKEN || '',
+    projectKey: (process.env as any).VITE_JIRA_PROJECT_KEY || ''
+  });
 
   // Generate a consistent random ID for this session
   const sessionId = useMemo(() => Math.floor(100 + Math.random() * 900), []);
@@ -524,6 +536,36 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
         }
       }));
       setShowHistory(false);
+    }
+  };
+
+  const handleJiraSync = async () => {
+    if (!jiraConfig.domain || !jiraConfig.email || !jiraConfig.apiToken || !jiraConfig.projectKey) {
+      alert("Please fill in all Jira configuration fields.");
+      return;
+    }
+
+    setIsJiraSyncing(true);
+    setJiraSyncProgress("Initializing sync...");
+
+    try {
+      let domain = jiraConfig.domain;
+      if (!domain.startsWith('http')) domain = 'https://' + domain;
+      if (domain.endsWith('/')) domain = domain.slice(0, -1);
+
+      await jiraService.syncBacklog(
+        { ...jiraConfig, domain },
+        currentStageData.output,
+        (msg) => setJiraSyncProgress(msg)
+      );
+
+      alert("Success! Your backlog has been pushed to Jira.");
+      setShowJiraSync(false);
+    } catch (err: any) {
+      console.error(err);
+      // setJiraSyncProgress is handled by the service catch block mostly
+    } finally {
+      setIsJiraSyncing(false);
     }
   };
 
@@ -1188,6 +1230,104 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
                       <p className="text-[9px] text-slate-500 font-bold uppercase tracking-[0.2em]">{new Date().toLocaleDateString()} @ {new Date().toLocaleTimeString()}</p>
                     </div>
                   </div>
+
+                  {/* JIRA INTEGRATION PANEL (New Feature) */}
+                  {state.currentStage === DiscoveryStage.EPICS && (
+                    <div className="report-card border-indigo-500/30 bg-indigo-600/5 mb-8 overflow-hidden group">
+                      <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 bg-[#0052CC] rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/20">
+                            <i className="fab fa-jira text-white text-lg"></i>
+                          </div>
+                          <div>
+                            <h5 className="text-[12px] font-black uppercase tracking-widest text-indigo-400 leading-none mb-1">Jira Cloud Synchronization</h5>
+                            <p className="text-[9px] text-slate-500 uppercase font-bold tracking-tighter">Bridge strategy to execution</p>
+                          </div>
+                        </div>
+                        {!showJiraSync ? (
+                          <button
+                            onClick={() => setShowJiraSync(true)}
+                            className="px-4 py-2 rounded-xl bg-[#0052CC] text-[10px] font-black text-white uppercase tracking-widest hover:bg-[#0747A6] transition-all flex items-center gap-2"
+                          >
+                            <i className="fas fa-plug"></i> Connect & Sync
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setShowJiraSync(false)}
+                            className="text-slate-500 hover:text-white transition-colors"
+                          >
+                            <i className="fas fa-times"></i>
+                          </button>
+                        )}
+                      </div>
+
+                      {showJiraSync && (
+                        <div className="space-y-6 animate-in slide-in-from-top-4 duration-500">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                              <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Jira URL</label>
+                              <input
+                                type="text"
+                                placeholder="your-domain.atlassian.net"
+                                value={jiraConfig.domain}
+                                onChange={(e) => setJiraConfig({ ...jiraConfig, domain: e.target.value })}
+                                className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-4 py-2.5 text-[11px] text-white outline-none focus:border-indigo-500/50"
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Email</label>
+                              <input
+                                type="email"
+                                placeholder="admin@company.com"
+                                value={jiraConfig.email}
+                                onChange={(e) => setJiraConfig({ ...jiraConfig, email: e.target.value })}
+                                className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-4 py-2.5 text-[11px] text-white outline-none focus:border-indigo-500/50"
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">API Token</label>
+                              <input
+                                type="password"
+                                placeholder="ATATT3xF..."
+                                value={jiraConfig.apiToken}
+                                onChange={(e) => setJiraConfig({ ...jiraConfig, apiToken: e.target.value })}
+                                className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-4 py-2.5 text-[11px] text-white outline-none focus:border-indigo-500/50"
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Project Key</label>
+                              <input
+                                type="text"
+                                placeholder="PROJ"
+                                value={jiraConfig.projectKey}
+                                onChange={(e) => setJiraConfig({ ...jiraConfig, projectKey: e.target.value })}
+                                className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-4 py-2.5 text-[11px] text-white outline-none focus:border-indigo-500/50"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="pt-4 border-t border-slate-800/50 flex flex-col sm:flex-row items-center justify-between gap-4">
+                            <p className="text-[10px] text-slate-500 italic max-w-sm">
+                              {isJiraSyncing ? (
+                                <span className="flex items-center gap-2 text-[#0052CC] font-bold animate-pulse">
+                                  <i className="fas fa-spinner fa-spin"></i> {jiraSyncProgress}
+                                </span>
+                              ) : (
+                                "This will parse the current backlog and create Epics and User Stories in your Jira project."
+                              )}
+                            </p>
+                            <button
+                              onClick={handleJiraSync}
+                              disabled={isJiraSyncing}
+                              className="w-full sm:w-auto px-8 py-3 rounded-xl bg-indigo-600 text-[10px] font-black text-white uppercase tracking-widest hover:bg-indigo-500 transition-all disabled:opacity-30 flex items-center justify-center gap-2"
+                            >
+                              {isJiraSyncing ? "Syncing..." : "Start Push to Jira"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Main Content Sections */}
                   <div className="space-y-8">
