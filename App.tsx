@@ -7,7 +7,8 @@ import { GeminiCapability } from './services/modelConfig';
 import { scrapeUrl } from './services/webScraper';
 import { jiraService } from './services/jiraService';
 import { createLiveAssistant } from './services/liveService';
-import { GroqVoiceAssistant } from './services/groqVoiceService';
+import { HybridVoiceAssistant } from './services/groqVoiceService';
+import { VoiceInputTrigger } from './components/VoiceInputTrigger';
 import MarkdownRenderer from './components/MarkdownRenderer';
 import PresentationView from './components/PresentationView';
 import ChatBot from './components/ChatBot';
@@ -176,8 +177,8 @@ const App: React.FC = () => {
 
 
   const startGroqVoice = () => {
-    console.log("Starting Groq Voice Assistant (Fallback)...");
-    liveSessionRef.current = new GroqVoiceAssistant({
+    console.log("Starting Hybrid Voice Assistant (Gemini Primary -> Groq Fallback)...");
+    liveSessionRef.current = new HybridVoiceAssistant({
       onUpdateMainContext: (text, mode) => {
         setState(prev => ({
           ...prev,
@@ -273,6 +274,57 @@ const App: React.FC = () => {
         startGroqVoice();
       }
     }
+  };
+
+  // Separate handler for Field-Level Voice Triggers (Microphone Buttons)
+  // This uses the Hybrid (Gemini -> Groq) non-streaming assistant for specific updates
+  const handleFieldVoice = () => {
+    if (liveSessionRef.current) {
+      // If already running (Stop it)
+      if (liveSessionRef.current.stop) liveSessionRef.current.stop();
+      liveSessionRef.current = null;
+      setVoice(prev => ({ ...prev, isActive: false, isListening: false }));
+      return;
+    }
+
+    // Start Hybrid Assistant
+    setVoice(prev => ({ ...prev, isActive: true, isListening: true }));
+    liveSessionRef.current = new HybridVoiceAssistant({
+      onUpdateMainContext: (text, mode) => {
+        setState(prev => ({
+          ...prev,
+          stages: {
+            ...prev.stages,
+            [prev.currentStage]: {
+              ...prev.stages[prev.currentStage],
+              input: mode === 'replace' ? text : `${prev.stages[prev.currentStage].input}\n${text}`
+            }
+          }
+        }));
+      },
+      onUpdateRefinementAnswer: (index, text) => {
+        setState(prev => ({
+          ...prev,
+          stages: {
+            ...prev.stages,
+            [prev.currentStage]: {
+              ...prev.stages[prev.currentStage],
+              answers: { ...prev.stages[prev.currentStage].answers, [index.toString()]: text }
+            }
+          }
+        }));
+      },
+      onSwitchModule: (module) => {
+        setState(prev => ({ ...prev, currentStage: module as DiscoveryStage }));
+      },
+      onTranscription: (text, role) => {
+        setVoice(v => ({ ...v, transcript: text }));
+      },
+      onStateChange: (s) => setVoice(v => ({ ...v, ...s }))
+    }, state);
+
+    // Start listening
+    (liveSessionRef.current as any).start();
   };
 
   const parseQuestions = (text: string) => {
@@ -1213,6 +1265,14 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400">Module Context</span>
                     {voice.isActive && <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></div>}
+                    <VoiceInputTrigger
+                      onStart={handleFieldVoice}
+                      isListening={voice.isActive && !liveSessionRef.current} // Simple heuristic: active but not WebSocket session? Actually, handleFieldVoice toggles isActive.
+                      // Better: Check if liveSessionRef is instance of HybridVoiceAssistant?
+                      // For now, reuse voice.isActive, assuming global exclusivity.
+                      size="sm"
+                      className="ml-2"
+                    />
                   </div>
                   {state.currentStage !== DiscoveryStage.DOMAIN && (
                     <button onClick={importPrevious} className="text-[10px] font-bold text-slate-500 hover:text-indigo-400 flex items-center gap-1.5 transition-colors group">
@@ -1440,8 +1500,16 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
                         </div>
                         <div className="space-y-6">
                           {currentStageData.questions.map((q, i) => (
-                            <div key={i} className="group">
-                              <label className="block text-[10px] font-bold text-slate-400 mb-2 leading-relaxed opacity-70 group-hover:opacity-100 transition-opacity">{q}</label>
+                            <div key={i} className="group relative">
+                              <div className="flex items-center justify-between mb-2">
+                                <label className="block text-[10px] font-bold text-slate-400 leading-relaxed opacity-70 group-hover:opacity-100 transition-opacity">{q}</label>
+                                <VoiceInputTrigger
+                                  onStart={handleFieldVoice}
+                                  isListening={voice.isActive && !liveSessionRef.current}
+                                  size="sm"
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity"
+                                />
+                              </div>
                               <textarea
                                 rows={2}
                                 value={currentStageData.answers[i.toString()] || ''}
@@ -2154,6 +2222,12 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
                       }}
                       placeholder="Type instructions to refine the document..."
                       className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 pr-12 text-xs text-white placeholder:text-slate-600 focus:border-indigo-500/50 outline-none resize-none h-24 transition-all"
+                    />
+                    <VoiceInputTrigger
+                      onStart={handleFieldVoice}
+                      isListening={voice.isActive && !liveSessionRef.current}
+                      size="md"
+                      className="absolute bottom-3 right-12 shadow-lg"
                     />
                     <button
                       onClick={handleRefineChat}

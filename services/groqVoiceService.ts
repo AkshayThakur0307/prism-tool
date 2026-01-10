@@ -1,6 +1,8 @@
 import Groq from "groq-sdk";
 import { AppState, DiscoveryStage } from '../types';
 import { STAGE_CONFIGS } from '../constants';
+import { callGeminiAgent } from "./geminiService";
+import { GeminiCapability } from "./modelConfig";
 
 export interface VoiceHandlers {
     onUpdateMainContext: (text: string, mode: 'replace' | 'append') => void;
@@ -10,7 +12,7 @@ export interface VoiceHandlers {
     onStateChange: (state: { isListening: boolean; isSpeaking: boolean }) => void;
 }
 
-export class GroqVoiceAssistant {
+export class HybridVoiceAssistant {
     private groq: Groq;
     private handlers: VoiceHandlers;
     private appState: AppState;
@@ -19,7 +21,7 @@ export class GroqVoiceAssistant {
     private isProcessing = false;
 
     constructor(handlers: VoiceHandlers, appState: AppState) {
-        this.groq = new Groq({ apiKey: process.env.GROQ_API_KEY, dangerouslyAllowBrowser: true });
+        this.groq = new Groq({ apiKey: import.meta.env.VITE_GROQ_API_KEY || process.env.GROQ_API_KEY || '', dangerouslyAllowBrowser: true });
         this.handlers = handlers;
         this.appState = appState;
     }
@@ -57,9 +59,10 @@ export class GroqVoiceAssistant {
     private async processAudio(blob: Blob) {
         if (this.isProcessing) return;
         this.isProcessing = true;
+        this.handlers.onStateChange({ isListening: false, isSpeaking: false }); // Show processing state if needed
 
         try {
-            // 1. Transcription using Whisper-Large-V3-Turbo
+            // 1. Transcription using Whisper-Large-V3-Turbo (Groq is fastest for STT)
             const file = new File([blob], 'audio.webm', { type: 'audio/webm' });
             const transcription = await this.groq.audio.transcriptions.create({
                 file: file,
@@ -71,95 +74,182 @@ export class GroqVoiceAssistant {
 
             this.handlers.onTranscription(userText, 'user');
 
-            // 2. Intelligent Response & Action using GPT-OSS-120B
+            // 2. Intelligent Response (Gemini Primary -> Groq Failover)
             const currentStageData = this.appState.stages[this.appState.currentStage];
             const questionsContext = currentStageData.questions.length > 0
                 ? `Refinement Questions Available:\n${currentStageData.questions.map((q, i) => `${i}: ${q}`).join('\n')}`
                 : "No refinement questions currently.";
 
             const systemPrompt = `
-        You are the PRSIM.AI Discovery Voice Assistant powered by GPT-OSS-120B.
-        
-        Current Module: ${this.appState.currentStage} (${STAGE_CONFIGS[this.appState.currentStage].title})
-        Current Text Input: "${currentStageData.input}"
-        ${questionsContext}
-        
-        GOAL:
-        - Determine if the user is providing new info, answering a question, or switching modules.
-        - Respond concisely for text-to-speech.
-        - You MUST use one of the tools provided to update the app state.
-      `;
+                You are the PRSIM.AI Discovery Voice Assistant.
+                Current Module: ${this.appState.currentStage} (${STAGE_CONFIGS[this.appState.currentStage].title})
+                Current Text Input: "${currentStageData.input}"
+                ${questionsContext}
+                
+                GOAL:
+                - Determine if the user is providing new info, answering a question, or switching modules.
+                - Respond concisely for text-to-speech.
+                - You MUST use one of the tools provided to update the app state.
+            `;
 
-            const response = await this.groq.chat.completions.create({
-                model: 'openai/gpt-oss-120b',
-                messages: [
-                    { role: 'system', content: systemPrompt },
-                    { role: 'user', content: userText }
-                ],
-                tools: [
-                    {
-                        type: 'function',
-                        function: {
+            // Tool Definitions (Gemini Format)
+            const geminiTools = [
+                {
+                    functionDeclarations: [
+                        {
                             name: 'updateMainContext',
                             description: 'Update the primary text box for the project analysis.',
                             parameters: {
-                                type: 'object',
+                                type: 'OBJECT',
                                 properties: {
-                                    text: { type: 'string' },
-                                    mode: { type: 'string', enum: ['replace', 'append'] }
+                                    text: { type: 'STRING' },
+                                    mode: { type: 'STRING', enum: ['replace', 'append'] }
                                 },
                                 required: ['text', 'mode']
                             }
-                        }
-                    },
-                    {
-                        type: 'function',
-                        function: {
+                        },
+                        {
                             name: 'updateRefinementAnswer',
                             description: 'Answer a specific follow-up question.',
                             parameters: {
-                                type: 'object',
+                                type: 'OBJECT',
                                 properties: {
-                                    index: { type: 'number' },
-                                    text: { type: 'string' }
+                                    index: { type: 'NUMBER' },
+                                    text: { type: 'STRING' }
                                 },
                                 required: ['index', 'text']
                             }
-                        }
-                    },
-                    {
-                        type: 'function',
-                        function: {
+                        },
+                        {
                             name: 'switchModule',
                             description: 'Navigate to a different discovery stage.',
                             parameters: {
-                                type: 'object',
+                                type: 'OBJECT',
                                 properties: {
-                                    module: { type: 'string', enum: ['DOMAIN', 'BOD', 'KPI', 'EPICS'] }
+                                    module: { type: 'STRING', enum: ['DOMAIN', 'BOD', 'KPI', 'EPICS'] }
                                 },
                                 required: ['module']
                             }
                         }
-                    }
-                ],
-                tool_choice: 'auto',
-            });
-
-            const aiMessage = response.choices[0].message;
-
-            // Handle Tool Calls
-            if (aiMessage.tool_calls) {
-                for (const toolCall of aiMessage.tool_calls) {
-                    const args = JSON.parse(toolCall.function.arguments);
-                    if (toolCall.function.name === 'updateMainContext') this.handlers.onUpdateMainContext(args.text, args.mode);
-                    if (toolCall.function.name === 'updateRefinementAnswer') this.handlers.onUpdateRefinementAnswer(args.index, args.text);
-                    if (toolCall.function.name === 'switchModule') this.handlers.onSwitchModule(args.module);
+                    ]
                 }
-            }
+            ];
 
-            const replyText = aiMessage.content || "Got it. I've updated the project details.";
-            this.handlers.onTranscription(replyText, 'assistant');
-            this.speak(replyText);
+            try {
+                // PRIMARY: Convert to Gemini Call
+                console.log("[HybridVoice] Attempting Gemini Primary...");
+                const geminiResponse = await callGeminiAgent(
+                    GeminiCapability.CHAT, // Use Flash for speed
+                    systemPrompt,
+                    userText,
+                    [],
+                    false,
+                    false,
+                    undefined,
+                    geminiTools
+                );
+
+                // Handle Tool Calls from Gemini
+                // Gemini returns tool calls in candidates[0].content.parts
+                const candidates = geminiResponse.rawResponse?.candidates;
+                let toolCallsFound = false;
+
+                if (candidates && candidates.length > 0) {
+                    for (const part of candidates[0].content.parts) {
+                        if (part.functionCall) {
+                            toolCallsFound = true;
+                            const fc = part.functionCall;
+                            const args = fc.args;
+
+                            console.log(`[HybridVoice] Executing Tool: ${fc.name}`, args);
+
+                            if (fc.name === 'updateMainContext') this.handlers.onUpdateMainContext(args.text, args.mode);
+                            if (fc.name === 'updateRefinementAnswer') this.handlers.onUpdateRefinementAnswer(args.index, args.text);
+                            if (fc.name === 'switchModule') this.handlers.onSwitchModule(args.module);
+                        }
+                    }
+                }
+
+                const replyText = geminiResponse.text || "Updated.";
+                this.handlers.onTranscription(replyText, 'assistant');
+                this.speak(replyText);
+
+            } catch (geminiError: any) {
+                console.warn("[HybridVoice] Gemini Failed. Failing over to Groq Llama 3...", geminiError);
+
+                // FAILOVER: Groq Llama 3
+                const response = await this.groq.chat.completions.create({
+                    model: 'openai/gpt-oss-120b',
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: userText }
+                    ],
+                    // Groq Tool Format (OpenAI Compatible)
+                    tools: [
+                        {
+                            type: 'function',
+                            function: {
+                                name: 'updateMainContext',
+                                description: 'Update the primary text box for the project analysis.',
+                                parameters: {
+                                    type: 'object',
+                                    properties: {
+                                        text: { type: 'string' },
+                                        mode: { type: 'string', enum: ['replace', 'append'] }
+                                    },
+                                    required: ['text', 'mode']
+                                }
+                            }
+                        },
+                        {
+                            type: 'function',
+                            function: {
+                                name: 'updateRefinementAnswer',
+                                description: 'Answer a specific follow-up question.',
+                                parameters: {
+                                    type: 'object',
+                                    properties: {
+                                        index: { type: 'number' },
+                                        text: { type: 'string' }
+                                    },
+                                    required: ['index', 'text']
+                                }
+                            }
+                        },
+                        {
+                            type: 'function',
+                            function: {
+                                name: 'switchModule',
+                                description: 'Navigate to a different discovery stage.',
+                                parameters: {
+                                    type: 'object',
+                                    properties: {
+                                        module: { type: 'string', enum: ['DOMAIN', 'BOD', 'KPI', 'EPICS'] }
+                                    },
+                                    required: ['module']
+                                }
+                            }
+                        }
+                    ],
+                    tool_choice: 'auto',
+                });
+
+                const aiMessage = response.choices[0].message;
+
+                // Handle Tool Calls
+                if (aiMessage.tool_calls) {
+                    for (const toolCall of aiMessage.tool_calls) {
+                        const args = JSON.parse(toolCall.function.arguments);
+                        if (toolCall.function.name === 'updateMainContext') this.handlers.onUpdateMainContext(args.text, args.mode);
+                        if (toolCall.function.name === 'updateRefinementAnswer') this.handlers.onUpdateRefinementAnswer(args.index, args.text);
+                        if (toolCall.function.name === 'switchModule') this.handlers.onSwitchModule(args.module);
+                    }
+                }
+
+                const replyText = aiMessage.content || "Got it. I've updated the project details.";
+                this.handlers.onTranscription(replyText, 'assistant');
+                this.speak(replyText);
+            }
 
         } catch (err) {
             console.error("Voice Processing Error:", err);

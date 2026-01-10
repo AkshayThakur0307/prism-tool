@@ -9,6 +9,7 @@ export interface GeminiAgentResponse {
   text: string;
   sources?: GroundingSource[];
   searchEntryPointHtml?: string;
+  rawResponse?: any;
 }
 
 export async function callGeminiAgent(
@@ -18,9 +19,9 @@ export async function callGeminiAgent(
   contextFiles: FileContext[] = [],
   isThinking: boolean = false,
   useSearch: boolean = false,
-  modelOverride?: string // Optional override for manual selection
+  modelOverride?: string, // Optional override for manual selection
+  tools?: any[] // Support generic tools
 ): Promise<GeminiAgentResponse> {
-
   const hasMultimodal = contextFiles.some(f => f.mimeType.startsWith('image/') || f.mimeType.startsWith('video/') || f.mimeType === 'application/pdf');
 
   // 1. Determine Model ID
@@ -40,7 +41,6 @@ export async function callGeminiAgent(
   }
 
   // Define API Client - checking multiple common env var patterns for client-side compatibility
-  // Note: Vite uses import.meta.env.VITE_... by default. process.env requires explicit define in vite.config.ts.
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY ||
     import.meta.env.VITE_API_KEY ||
     process.env.API_KEY ||
@@ -103,9 +103,13 @@ export async function callGeminiAgent(
 
     if (useSearch) {
       config.tools = [{ googleSearch: {} }];
+    } else if (tools && tools.length > 0) {
+      // Apply Generic Tools if Search is NOT active (mutually exclusive usually for simplicity, or merge)
+      // Merging:
+      config.tools = [...(config.tools || []), ...tools];
     }
 
-    console.log(`[Gemini] Calling model ${modelToUse} (Thinking: ${isThinking}, Search: ${useSearch})...`);
+    console.log(`[Gemini] Calling model ${modelToUse} (Thinking: ${isThinking}, Search: ${useSearch}, Tools: ${tools?.length})...`);
 
     // PRIMARY CALL
     let response = await ai.models.generateContent({
@@ -121,20 +125,11 @@ export async function callGeminiAgent(
 
     if (useSearch && !hasNativeGrounding) {
       console.warn("[Gemini] Native search yielded no grounding. Attempting Serper Failover...");
-
-      // 1. Synthesize a query (simple heuristic for now: use first 200 chars of prompt)
-      // Ideally we'd ask the LLM to generate a query, but to save latency we'll check if Serper finds anything for the main topic
-      // Better: Use the searchService to run a query based on the prompt
-
-      // To be safe and context-aware, let's just trigger Serper with the userPrompt truncated
       const query = userPrompt.length > 100 ? userPrompt.substring(0, 100) : userPrompt;
-
       const serperResults = await searchGoogle(query);
 
       if (serperResults.text) {
         console.log("[Gemini] Serper results found. Re-prompting Gemini with injected context.");
-
-        // Inject results into a new prompt
         const searchContext = `
 === FALLBACK SEARCH CONTEXT (Source: Google via Serper) ===
 ${serperResults.text}
@@ -143,7 +138,8 @@ ${serperResults.text}
         parts.push({ text: searchContext });
 
         // Re-run the call without the googleSearch tool (since we have manual context now)
-        delete config.tools;
+        // Keep generic tools if they exist
+        config.tools = tools && tools.length > 0 ? tools : undefined;
 
         response = await ai.models.generateContent({
           model: modelToUse,
@@ -155,7 +151,8 @@ ${serperResults.text}
         return {
           text: response.text || "No response received.",
           sources: serperResults.sources, // Use Serper sources
-          searchEntryPointHtml: undefined
+          searchEntryPointHtml: undefined,
+          rawResponse: response // Allow access to function calls if needed
         };
       }
     }
@@ -191,7 +188,8 @@ ${serperResults.text}
     return {
       text,
       sources: uniqueSources.length > 0 ? uniqueSources : undefined,
-      searchEntryPointHtml
+      searchEntryPointHtml,
+      rawResponse: response // Return raw for tool parsing
     };
 
   } catch (error: any) {
