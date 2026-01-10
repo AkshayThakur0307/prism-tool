@@ -7,6 +7,7 @@ export interface LiveHandlers {
   onSwitchModule: (module: string) => void;
   onTranscription: (text: string, role: 'user' | 'model') => void;
   onStateChange: (state: { isListening: boolean; isSpeaking: boolean }) => void;
+  onError?: (error: any) => void;
 }
 
 export function createLiveAssistant(handlers: LiveHandlers, currentQuestions: string[] = [], currentMainInput: string = "") {
@@ -85,7 +86,7 @@ export function createLiveAssistant(handlers: LiveHandlers, currentQuestions: st
     }
   ];
 
-  const questionsContext = currentQuestions.length > 0 
+  const questionsContext = currentQuestions.length > 0
     ? `The current refinement questions available for this module are:\n${currentQuestions.map((q, i) => `${i}: ${q}`).join('\n')}`
     : "There are currently no refinement questions for this stage.";
 
@@ -141,7 +142,7 @@ CRITICAL INSTRUCTIONS:
             if (fc.name === 'updateMainContext') handlers.onUpdateMainContext(fc.args.text as string, fc.args.mode as any);
             if (fc.name === 'updateRefinementAnswer') handlers.onUpdateRefinementAnswer(fc.args.index as number, fc.args.text as string);
             if (fc.name === 'switchModule') handlers.onSwitchModule(fc.args.module as string);
-            
+
             sessionPromise.then(s => s.sendToolResponse({
               functionResponses: { id: fc.id, name: fc.name, response: { result } }
             }));
@@ -177,7 +178,10 @@ CRITICAL INSTRUCTIONS:
         inputAudioContext?.close();
         outputAudioContext?.close();
       },
-      onerror: (e) => console.error('Live API Error:', e)
+      onerror: (e) => {
+        console.error('Live API Error:', e);
+        if (handlers.onError) handlers.onError(e);
+      }
     }
   });
 

@@ -2,9 +2,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { DiscoveryStage, AppState, FileContext, VoiceState, GroundingSource, ProjectMetadata, StageVersion } from './types';
 import { STAGE_CONFIGS } from './constants';
-import { callGroqAgent } from './services/groqService';
+import { callGeminiAgent } from './services/geminiService';
+import { GeminiCapability } from './services/modelConfig';
 import { scrapeUrl } from './services/webScraper';
 import { jiraService } from './services/jiraService';
+import { createLiveAssistant } from './services/liveService';
 import { GroqVoiceAssistant } from './services/groqVoiceService';
 import MarkdownRenderer from './components/MarkdownRenderer';
 import PresentationView from './components/PresentationView';
@@ -138,46 +140,104 @@ const App: React.FC = () => {
     return Math.min(99, Math.round(score)); // Cap at 99% for professional realism
   };
 
+
+  const startGroqVoice = () => {
+    console.log("Starting Groq Voice Assistant (Fallback)...");
+    liveSessionRef.current = new GroqVoiceAssistant({
+      onUpdateMainContext: (text, mode) => {
+        setState(prev => ({
+          ...prev,
+          stages: {
+            ...prev.stages,
+            [prev.currentStage]: {
+              ...prev.stages[prev.currentStage],
+              input: mode === 'replace' ? text : `${prev.stages[prev.currentStage].input}\n${text}`
+            }
+          }
+        }));
+      },
+      onUpdateRefinementAnswer: (index, text) => {
+        setState(prev => ({
+          ...prev,
+          stages: {
+            ...prev.stages,
+            [prev.currentStage]: {
+              ...prev.stages[prev.currentStage],
+              answers: { ...prev.stages[prev.currentStage].answers, [index.toString()]: text }
+            }
+          }
+        }));
+      },
+      onSwitchModule: (module) => {
+        setState(prev => ({ ...prev, currentStage: module as DiscoveryStage }));
+      },
+      onTranscription: (text, role) => {
+        setVoice(v => ({ ...v, transcript: text }));
+      },
+      onStateChange: (s) => setVoice(v => ({ ...v, ...s }))
+    }, state);
+    liveSessionRef.current.start();
+  };
+
   const toggleVoice = () => {
     if (voice.isActive) {
-      liveSessionRef.current?.stop();
+      if (liveSessionRef.current && liveSessionRef.current.stop) {
+        liveSessionRef.current.stop();
+      }
       setVoice({ isActive: false, isListening: false, isSpeaking: false, transcript: '' });
+      liveSessionRef.current = null;
     } else {
-      setVoice(v => ({ ...v, isActive: true }));
-      liveSessionRef.current = new GroqVoiceAssistant({
-        onUpdateMainContext: (text, mode) => {
-          setState(prev => ({
-            ...prev,
-            stages: {
-              ...prev.stages,
-              [prev.currentStage]: {
-                ...prev.stages[prev.currentStage],
-                input: mode === 'replace' ? text : `${prev.stages[prev.currentStage].input}\n${text}`
+      setVoice(v => ({ ...v, isActive: true, isListening: true }));
+
+      // Try Gemini Live First
+      try {
+        console.log("Attempting to connect to Gemini Live...");
+        const currentQuestions = state.stages[state.currentStage].questions;
+        const currentInput = state.stages[state.currentStage].input;
+
+        liveSessionRef.current = createLiveAssistant({
+          onUpdateMainContext: (text, mode) => {
+            setState(prev => ({
+              ...prev,
+              stages: {
+                ...prev.stages,
+                [prev.currentStage]: {
+                  ...prev.stages[prev.currentStage],
+                  input: mode === 'replace' ? text : `${prev.stages[prev.currentStage].input}\n${text}`
+                }
               }
-            }
-          }));
-        },
-        onUpdateRefinementAnswer: (index, text) => {
-          setState(prev => ({
-            ...prev,
-            stages: {
-              ...prev.stages,
-              [prev.currentStage]: {
-                ...prev.stages[prev.currentStage],
-                answers: { ...prev.stages[prev.currentStage].answers, [index.toString()]: text }
+            }));
+          },
+          onUpdateRefinementAnswer: (index, text) => {
+            setState(prev => ({
+              ...prev,
+              stages: {
+                ...prev.stages,
+                [prev.currentStage]: {
+                  ...prev.stages[prev.currentStage],
+                  answers: { ...prev.stages[prev.currentStage].answers, [index.toString()]: text }
+                }
               }
-            }
-          }));
-        },
-        onSwitchModule: (module) => {
-          setState(prev => ({ ...prev, currentStage: module as DiscoveryStage }));
-        },
-        onTranscription: (text, role) => {
-          setVoice(v => ({ ...v, transcript: text }));
-        },
-        onStateChange: (s) => setVoice(v => ({ ...v, ...s }))
-      }, state);
-      liveSessionRef.current.start();
+            }));
+          },
+          onSwitchModule: (module) => {
+            setState(prev => ({ ...prev, currentStage: module as DiscoveryStage }));
+          },
+          onTranscription: (text, role) => {
+            setVoice(v => ({ ...v, transcript: text }));
+          },
+          onStateChange: (s) => setVoice(v => ({ ...v, ...s })),
+          onError: (err) => {
+            console.warn("Gemini Live Error. Switching to Groq Fallback.", err);
+            if (liveSessionRef.current === null) return; // Already stopped
+            startGroqVoice();
+          }
+        }, currentQuestions, currentInput);
+
+      } catch (err) {
+        console.error("Gemini Live Initialization Failed:", err);
+        startGroqVoice();
+      }
     }
   };
 
@@ -463,8 +523,8 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
         finalUserPrompt += `\n\n=== SCRAPED WEB CONTENT ===\n${scrapedResults.join('\n\n----------------\n\n')}\n===========================`;
       }
 
-      const result = await callGroqAgent(
-        'openai/gpt-oss-120b',
+      const result = await callGeminiAgent(
+        GeminiCapability.ANALYSIS_MAIN,
         STAGE_CONFIGS[targetStage].systemInstruction,
         finalUserPrompt,
         allFiles,

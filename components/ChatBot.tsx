@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import Groq from "groq-sdk";
+import { callGeminiAgent } from '../services/geminiService';
+import { GeminiCapability } from '../services/modelConfig';
 import { AppState, DiscoveryStage } from '../types';
 import MarkdownRenderer from './MarkdownRenderer';
 import { STAGE_CONFIGS } from '../constants';
@@ -60,15 +61,10 @@ const ChatBot: React.FC<ChatBotProps> = ({ appState }) => {
     setIsTyping(true);
 
     try {
-      if (!process.env.GROQ_API_KEY) {
-        throw new Error("GROQ_API_KEY is missing.");
-      }
-
-      const groq = new Groq({ apiKey: process.env.GROQ_API_KEY, dangerouslyAllowBrowser: true });
       const currentStageData = appState.stages[appState.currentStage];
 
       const systemInstruction = `
-        You are the "Discovery Pro AI Assistant", an expert product strategist powered by GPT-OSS-120B via Groq.
+        You are the "Discovery Pro AI Assistant", an expert product strategist.
         
         GLOBAL CONTEXT:
         - Company: ${appState.projectMetadata.companyName}
@@ -95,18 +91,23 @@ const ChatBot: React.FC<ChatBotProps> = ({ appState }) => {
         - Reference the global mission and company name whenever providing strategic advice.
       `;
 
-      const response = await groq.chat.completions.create({
-        model: 'openai/gpt-oss-120b',
-        messages: [
-          { role: 'system', content: systemInstruction },
-          ...messages.map(m => ({ role: m.role, content: m.content })),
-          { role: 'user', content: userMessage }
-        ],
-        temperature: 0.7,
-        max_tokens: 1024,
-      });
+      // Construct history context for the stateless agent call
+      const conversationHistory = messages.map(m => `${m.role === 'user' ? 'USER' : 'ASSISTANT'}: ${m.content}`).join('\n');
+      const fullPrompt = `
+CONVERSATION HISTORY:
+${conversationHistory}
 
-      const aiText = response.choices[0]?.message?.content || "I'm sorry, I'm having trouble processing that thought.";
+USER'S NEW MESSAGE:
+${userMessage}
+      `;
+
+      const response = await callGeminiAgent(
+        GeminiCapability.CHAT,
+        systemInstruction,
+        fullPrompt
+      );
+
+      const aiText = response.text;
       setMessages(prev => [...prev, { role: 'assistant', content: aiText }]);
     } catch (error) {
       console.error("ChatBot Error:", error);
