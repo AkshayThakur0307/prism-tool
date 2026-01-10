@@ -39,11 +39,19 @@ export default {
                 });
             }
 
-            const newHeaders = new Headers(request.headers);
-            newHeaders.delete('host');
-            newHeaders.delete('origin');
-            newHeaders.delete('referer');
+            const newHeaders = new Headers();
+            // Explicitly copy allowed headers to ensure we don't send garbage
+            const allowedHeaders = ['content-type', 'authorization', 'accept', 'x-atlassian-token'];
+            for (const [key, value] of request.headers) {
+                if (allowedHeaders.includes(key.toLowerCase())) {
+                    newHeaders.set(key, value);
+                }
+            }
+
+            // Enforce required headers
+            newHeaders.set('User-Agent', 'DiscoveryAccelerator/1.0 (Mozilla/5.0 compatible)');
             newHeaders.set('X-Atlassian-Token', 'no-check');
+            newHeaders.set('Accept', 'application/json');
 
             const fetchOptions: RequestInit = {
                 method: request.method,

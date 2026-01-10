@@ -220,7 +220,7 @@ ${userMessage}
             </button>
           </div>
           <p className="text-[8px] text-slate-600 uppercase font-black tracking-[0.2em] mt-3 text-center opacity-60">
-            Powered by Groq GPT-OSS Intelligence
+            Powered by Gemini Intelligence
           </p>
         </div>
       </div>

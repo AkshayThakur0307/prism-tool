@@ -8,7 +8,7 @@ export enum GeminiCapability {
 }
 
 export const GEMINI_MODELS = {
-    THINKING: 'gemini-2.0-flash-thinking-exp-01-21', // Deep reasoning
+    THINKING: 'gemini-2.0-flash-thinking-exp-1219', // Deep reasoning
     PRO: 'gemini-1.5-pro', // High context, complex analysis
     FLASH: 'gemini-1.5-flash', // Fast, conversational
     FLASH_EXP: 'gemini-2.0-flash-exp', // Cutting edge, good for tools/vision
