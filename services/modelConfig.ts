@@ -8,9 +8,9 @@ export enum GeminiCapability {
 }
 
 export const GEMINI_MODELS = {
-    THINKING: 'gemini-3-flash-preview', // Deep reasoning via config
-    PRO: 'gemini-3-pro-preview', // Flagship
-    FLASH: 'gemini-3-flash-preview', // Fast, conversational
+    THINKING: 'gemini-2.5-flash', // Thinking enabled via config on standard model
+    PRO: 'gemini-2.5-pro', // Analysis & Reports (Stable)
+    FLASH: 'gemini-2.5-flash', // Fast general tasks
     FLASH_EXP: 'gemini-2.5-flash-live', // Optimized for Live API
 };
 
