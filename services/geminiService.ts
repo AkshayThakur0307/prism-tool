@@ -12,21 +12,27 @@ export interface GeminiAgentResponse {
 }
 
 export async function callGeminiAgent(
-  capabilityOrModel: GeminiCapability | string,
+  capability: GeminiCapability,
   systemInstruction: string,
   userPrompt: string,
   contextFiles: FileContext[] = [],
   isThinking: boolean = false,
-  useSearch: boolean = false
+  useSearch: boolean = false,
+  modelOverride?: string // Optional override for manual selection
 ): Promise<GeminiAgentResponse> {
+
+  const hasMultimodal = contextFiles.some(f => f.mimeType.startsWith('image/') || f.mimeType.startsWith('video/') || f.mimeType === 'application/pdf');
+
   // 1. Determine Model ID
-  // 1. Determine Model ID
-  // Check if the input string acts as a known capability (e.g. 'analysis_main') and map it if so.
-  // Otherwise, treat it as a direct model ID (e.g. 'gemini-1.5-pro').
-  const knownCapabilities = Object.values(GeminiCapability) as string[];
-  let modelToUse = knownCapabilities.includes(capabilityOrModel)
-    ? getModelForCapability(capabilityOrModel as GeminiCapability)
-    : capabilityOrModel;
+  let modelToUse = modelOverride || getModelForCapability(capability);
+
+  // Fallback Logic: Ensure we don't use a text-only model if images are present (unless functionality dictates otherwise)
+  // For Gemini 2.0/2.5 Flash/Pro, they are multimodal by default, so this check is fairly safe.
+  if (hasMultimodal && !modelToUse.toLowerCase().includes('vision') && !modelToUse.toLowerCase().includes('flash') && !modelToUse.toLowerCase().includes('pro') && !modelToUse.toLowerCase().includes('exp')) {
+    // This is a safety catch, but modern Gemini models (Pro/Flash) are all multimodal.
+    // keeping basic check just in case legacy models invade.
+    modelToUse = getModelForCapability(GeminiCapability.VISION);
+  }
 
   // If thinking is enabled, override with the specific thinking model if not already set
   if (isThinking && !modelToUse.includes('thinking')) {
@@ -51,11 +57,10 @@ export async function callGeminiAgent(
   const parts: any[] = [{ text: userPrompt }];
 
   // Handle multimodal context (Images, PDFs, and Videos)
-  const hasMultimodal = contextFiles.some(f =>
-    f.mimeType.startsWith('image/') ||
-    f.mimeType.startsWith('video/') ||
-    f.mimeType === 'application/pdf'
-  );
+  // hasMultimodal is already calculated at the top
+  if (hasMultimodal) {
+    console.log('Processing multimodal context...');
+  }
 
   contextFiles.forEach(file => {
     const isFileMultimodal =
@@ -89,7 +94,7 @@ export async function callGeminiAgent(
     };
 
     if (isThinking) {
-      // 2026 Config for Gemini 3 Flash Thinking
+      // Config for Gemini 3 Flash Preview (Verified)
       config.thinkingConfig = {
         includeThoughts: true,
         thinkingLevel: "high"

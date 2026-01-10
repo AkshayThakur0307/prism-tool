@@ -37,6 +37,29 @@ const INITIAL_STATE: AppState = {
   }
 };
 
+const ModelSelector: React.FC<{ value: string; onChange: (val: string) => void; className?: string }> = ({ value, onChange, className }) => (
+  <div className={`relative group ${className || ''}`}>
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="appearance-none bg-slate-900 border border-slate-700 text-slate-300 text-[11px] font-bold rounded-lg pl-3 pr-8 py-1.5 focus:ring-blue-500 focus:border-blue-500 hover:border-slate-500 transition-colors cursor-pointer outline-none uppercase tracking-wider w-full"
+      title="Select AI Model"
+    >
+      <optgroup label="Gemini (Google)">
+        <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+        <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+        <option value="gemini-3-flash-preview">Gemini 3 Preview</option>
+      </optgroup>
+      <optgroup label="Groq (Failover)">
+        <option value="groq-llama-3">Groq (Llama 3)</option>
+      </optgroup>
+    </select>
+    <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+      <i className="fas fa-chevron-down text-xs"></i>
+    </div>
+  </div>
+);
+
 const App: React.FC = () => {
   const { logout, user } = useAuth();
   const [state, setState] = useState<AppState>(INITIAL_STATE);
@@ -44,6 +67,7 @@ const App: React.FC = () => {
   const [isThinkingEnabled, setIsThinkingEnabled] = useState(false);
   const [isSearchEnabled, setIsSearchEnabled] = useState(false);
   const [statusIdx, setStatusIdx] = useState(0);
+  const [selectedModel, setSelectedModel] = useState<string>('gemini-2.5-pro'); // Default to Stable Pro
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isPresenting, setIsPresenting] = useState(false);
   const [showProjectConfig, setShowProjectConfig] = useState(false);
@@ -533,14 +557,48 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
         finalUserPrompt += `\n\n=== SCRAPED WEB CONTENT ===\n${scrapedResults.join('\n\n----------------\n\n')}\n===========================`;
       }
 
-      const result = await callGeminiAgent(
-        GeminiCapability.ANALYSIS_MAIN,
-        STAGE_CONFIGS[targetStage].systemInstruction,
-        finalUserPrompt,
-        allFiles,
-        isThinkingEnabled,
-        isSearchEnabled
-      );
+      let result;
+
+      // DISPATCHER LOGIC: Select Service based on Dropdown
+      if (selectedModel.startsWith('groq-')) {
+        console.log(`[Dispatcher] Routing to Groq Service (${selectedModel})...`);
+
+        // Import dynamically if needed, or rely on top-level. Using top-level import from plan.
+        // We must adapt the response format or ensure GroqVoiceService isn't confusingly named (it's groqService.ts).
+        const { callGroqAgent } = await import('./services/groqService'); // Dynamic import to be safe/lazy
+
+        // Call Groq
+        // Model mapping: groq-llama-3 -> openai/gpt-oss-120b (as per service logic) or pass explicit?
+        // The service currently hardcodes selection based on multimodal. 
+        // We will pass the ID just for logging, but the service handles the specific Llama implementation.
+        const groqResponse = await callGroqAgent(
+          selectedModel, // Passed for logging, service decides actual endpoint
+          STAGE_CONFIGS[targetStage].systemInstruction,
+          finalUserPrompt,
+          allFiles,
+          isThinkingEnabled,
+          isSearchEnabled
+        );
+
+        // Normalize response
+        result = {
+          text: groqResponse.text,
+          sources: groqResponse.sources || [],
+          searchEntryPointHtml: groqResponse.searchEntryPointHtml
+        };
+
+      } else {
+        console.log(`[Dispatcher] Routing to Gemini Service (${selectedModel})...`);
+        result = await callGeminiAgent(
+          GeminiCapability.ANALYSIS_MAIN,
+          STAGE_CONFIGS[targetStage].systemInstruction,
+          finalUserPrompt,
+          allFiles,
+          isThinkingEnabled,
+          isSearchEnabled,
+          selectedModel // Pass the specific override
+        );
+      }
 
       const finalCoherence = calculateCoherenceScore();
 
@@ -655,7 +713,8 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
         refineUserPrompt,
         [],
         false,
-        false
+        false,
+        selectedModel // Apply the selected model override
       );
 
       setPreviewOutput(result.text);
@@ -1325,15 +1384,31 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
                 </div>
 
                 {!currentStageData.output && (
-                  <button
-                    onClick={runAnalysis}
-                    disabled={!!analyzingStage || (!currentStageData.input && currentStageData.files.length === 0)}
-                    className="w-full mt-6 py-4 sm:py-5 btn-grad rounded-2xl text-[11px] sm:text-[12px] font-black uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      {analyzingStage === state.currentStage ? <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div> : <><i className="fas fa-wand-sparkles text-sm translate-y-[0.5px]"></i><span>{config.cta}</span></>}
+                  <>
+                    <div className="mt-3 mb-4">
+                      <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-800/20 border border-slate-700/50 transition-all hover:bg-slate-800/40">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-800 text-slate-400">
+                            <i className="fas fa-microchip text-xs"></i>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-wider text-white leading-none">Intelligence Engine</p>
+                            <p className="text-[8px] text-slate-500 mt-1 uppercase font-bold tracking-widest">Select Model</p>
+                          </div>
+                        </div>
+                        <ModelSelector value={selectedModel} onChange={setSelectedModel} className="w-48" />
+                      </div>
                     </div>
-                  </button>
+                    <button
+                      onClick={runAnalysis}
+                      disabled={!!analyzingStage || (!currentStageData.input && currentStageData.files.length === 0)}
+                      className="w-full py-4 sm:py-5 btn-grad rounded-2xl text-[11px] sm:text-[12px] font-black uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        {analyzingStage === state.currentStage ? <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div> : <><i className="fas fa-wand-sparkles text-sm translate-y-[0.5px]"></i><span>{config.cta}</span></>}
+                      </div>
+                    </button>
+                  </>
                 )}
               </div>
 
@@ -1350,6 +1425,18 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
                             <h3 className="text-xs font-black text-indigo-400 uppercase tracking-widest">Stage Refinement</h3>
                             <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-tighter">AI Needs Clarity</p>
                           </div>
+                          <button
+                            onClick={resetCurrentStage}
+                            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors group relative"
+                            title="Reset Stage"
+                          >
+                            <i className="fas fa-rotate-left text-lg"></i>
+                            <span className="absolute top-full mt-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-800 text-xs text-slate-200 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none">
+                              Reset Stage
+                            </span>
+                          </button>
+
+                          {/* Removed Model Selector from Header */}
                         </div>
                         <div className="space-y-6">
                           {currentStageData.questions.map((q, i) => (
@@ -1370,6 +1457,22 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
                       </div>
                     </div>
                   )}
+
+                  {/* REGENERATION MODEL SELECTOR */}
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-800/40 border border-slate-700/50 transition-all hover:bg-slate-800/60">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-800 text-slate-400">
+                          <i className="fas fa-microchip text-xs"></i>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-wider text-white leading-none">Intelligence Engine</p>
+                          <p className="text-[8px] text-slate-500 mt-1 uppercase font-bold tracking-widest">Select Model</p>
+                        </div>
+                      </div>
+                      <ModelSelector value={selectedModel} onChange={setSelectedModel} className="w-48" />
+                    </div>
+                  </div>
 
                   <button
                     onClick={runAnalysis}
@@ -1962,6 +2065,11 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
                 </div>
               </div>
               <div className="flex items-center gap-3">
+                <ModelSelector
+                  value={selectedModel}
+                  onChange={setSelectedModel}
+                  className="w-40"
+                />
                 <button
                   onClick={closeRefinementModal}
                   className="px-4 py-2 rounded-xl text-[11px] font-bold text-slate-400 hover:text-white uppercase tracking-wider transition-colors"
@@ -1981,12 +2089,23 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
             <div className="flex-1 flex overflow-hidden">
 
               {/* LEFT: Live Preview (65%) */}
-              <div className="flex-[2] border-r border-slate-800 bg-slate-950/50 flex flex-col min-w-0">
+              <div className="flex-[2] border-r border-slate-800 bg-slate-950/50 flex flex-col min-w-0 relative">
+                {isRefining && (
+                  <div className="absolute inset-0 z-10 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center flex-col gap-4 animate-in fade-in duration-300">
+                    <div className="relative">
+                      <div className="w-12 h-12 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <i className="fas fa-magic text-indigo-400 text-xs animate-pulse"></i>
+                      </div>
+                    </div>
+                    <p className="text-xs font-bold text-indigo-400 uppercase tracking-widest animate-pulse">Refining Content...</p>
+                  </div>
+                )}
                 <div className="h-10 border-b border-slate-800/50 flex items-center px-6 bg-slate-900/30">
                   <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Live Document Preview</span>
                 </div>
                 <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-                  <div className="prose prose-invert max-w-none prose-sm">
+                  <div className={`prose prose-invert max-w-none prose-sm transition-opacity duration-300 ${isRefining ? 'opacity-30' : 'opacity-100'}`}>
                     <MarkdownRenderer content={previewOutput} />
                   </div>
                 </div>

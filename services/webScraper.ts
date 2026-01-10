@@ -36,17 +36,27 @@ export async function scrapeUrl(url: string): Promise<string> {
         const reader = new Readability(doc);
         const article = reader.parse();
 
+        // 4. Sanitize Content Aggressively (remove non-printable chars that break Gemini JSON)
+        let rawText = "";
+        let title = "No Title";
+
         if (!article) {
-            // Fallback: Just get body text if Readability fails
-            const textContent = doc.body.innerText.replace(/\s+/g, ' ').trim().slice(0, 15000);
-            return `URL: ${url}\nTITLE: (Fallback Extraction)\n\nCONTENT:\n${textContent}`;
+            // Fallback
+            rawText = doc.body.innerText;
+            title = "(Fallback Extraction)";
+        } else {
+            title = article.title || "No Title";
+            rawText = article.textContent;
         }
 
-        // Return structured text
-        const title = article.title || "No Title";
-        const textContent = article.textContent.replace(/\s+/g, ' ').trim();
+        // Clean: remove control chars, collapse spaces, truncate to 8000 (safe for Flash 2.5 context mix)
+        const cleanText = rawText
+            .replace(/[\x00-\x09\x0B-\x0C\x0E-\x1F\x7F]/g, "") // Remove control characters
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 8000);
 
-        return `URL: ${url}\nTITLE: ${title}\n\nCONTENT:\n${textContent}`;
+        return `URL: ${url}\nTITLE: ${title}\n\nCONTENT:\n${cleanText}`;
 
     } catch (error: any) {
         console.error(`Scraping error for ${url}:`, error);

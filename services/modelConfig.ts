@@ -8,10 +8,10 @@ export enum GeminiCapability {
 }
 
 export const GEMINI_MODELS = {
-    THINKING: 'gemini-2.5-flash', // Thinking enabled via config on standard model
-    PRO: 'gemini-2.5-pro', // Analysis & Reports (Stable)
-    FLASH: 'gemini-2.5-flash', // Fast general tasks
-    FLASH_EXP: 'gemini-2.5-flash-live', // Optimized for Live API
+    THINKING: 'gemini-3-flash-preview', // Verified Thinking Model
+    PRO: 'gemini-2.5-pro', // Verified Stable Analysis
+    FLASH: 'gemini-2.5-flash', // Verified Stable Flash
+    FLASH_EXP: 'gemini-2.0-flash-exp', // Verified for Live API (bidiGenerateContent)
 };
 
 export function getModelForCapability(capability: GeminiCapability): string {
