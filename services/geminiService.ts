@@ -3,7 +3,10 @@ import { GoogleGenAI } from "@google/genai";
 import { FileContext, GroundingSource } from "../types";
 import { searchGoogle } from "./searchService";
 import { callGroqAgent } from "./groqService";
-import { GeminiCapability, getModelForCapability } from "./modelConfig";
+import { GeminiCapability, getModelForCapability, GEMINI_MODELS } from "./modelConfig";
+
+// Checking line 1: import { GoogleGenAI } from "@google/genai";
+// I will just use the correct import line.
 
 export interface GeminiAgentResponse {
   text: string;
@@ -125,35 +128,64 @@ export async function callGeminiAgent(
 
     if (useSearch && !hasNativeGrounding) {
       console.warn("[Gemini] Native search yielded no grounding. Attempting Serper Failover...");
-      const query = userPrompt.length > 100 ? userPrompt.substring(0, 100) : userPrompt;
-      const serperResults = await searchGoogle(query);
 
-      if (serperResults.text) {
-        console.log("[Gemini] Serper results found. Re-prompting Gemini with injected context.");
-        const searchContext = `
+      // Smart Query Extraction: Attempt to parse the "Active Input" from the prompt structure
+      // Matches the format defined in App.tsx runAnalysis
+      // Smart Query Extraction: parse Active Input and Module Context
+      const activeInputMatch = userPrompt.match(/=== ACTIVE TASK INPUT \(FOCUS HERE\) ===\n"([\s\S]*?)"\n======================================/);
+      const moduleContextMatch = userPrompt.match(/=== MODULE CONTEXT \(USE FOR SEARCH RELEVANCE\) ===\n([\s\S]*?)\n=================================================/);
+
+      const cleanInput = activeInputMatch ? activeInputMatch[1].trim() : null;
+      const contextInfo = moduleContextMatch ? moduleContextMatch[1].replace(/Stage:|Company:|Vertical:/g, '').replace(/\n/g, ' ').trim() : '';
+
+      // Fallback: Use the whole prompt only if it's short, otherwise skip
+      let query = cleanInput;
+      if (!query) {
+        if (userPrompt.length < 200) {
+          query = userPrompt;
+        } else {
+          console.warn("[Gemini] Could not extract active input for search. Skipping Serper failover to avoid irrelevant queries.");
+          query = null;
+        }
+      } else {
+        // Enrich query with context (if extracting clean input succeeded)
+        if (contextInfo) {
+          query = `${query} ${contextInfo}`.trim().substring(0, 200); // Limit length for Serper
+        }
+      }
+
+      if (query) {
+        const serperResults = await searchGoogle(query);
+
+        if (serperResults.text) {
+          console.log("[Gemini] Serper results found. Re-prompting Gemini with injected context.");
+          const searchContext = `
 === FALLBACK SEARCH CONTEXT (Source: Google via Serper) ===
+Query Used: "${query}"
+Results:
 ${serperResults.text}
 ===========================================================
 `;
-        parts.push({ text: searchContext });
+          parts.push({ text: searchContext });
 
-        // Re-run the call without the googleSearch tool (since we have manual context now)
-        // Keep generic tools if they exist
-        config.tools = tools && tools.length > 0 ? tools : undefined;
+          // Re-run the call without the googleSearch tool (since we have manual context now)
+          // Keep generic tools if they exist
+          config.tools = tools && tools.length > 0 ? tools : undefined;
 
-        response = await ai.models.generateContent({
-          model: modelToUse,
-          contents: { parts },
-          config: config,
-        });
+          response = await ai.models.generateContent({
+            model: modelToUse,
+            contents: { parts },
+            config: config,
+          });
 
-        // Manually construct a response structure that mimics native grounding for sources
-        return {
-          text: response.text || "No response received.",
-          sources: serperResults.sources, // Use Serper sources
-          searchEntryPointHtml: undefined,
-          rawResponse: response // Allow access to function calls if needed
-        };
+          // Manually construct a response structure that mimics native grounding for sources
+          return {
+            text: response.text || "No response received.",
+            sources: serperResults.sources, // Use Serper sources
+            searchEntryPointHtml: undefined,
+            rawResponse: response // Allow access to function calls if needed
+          };
+        }
       }
     }
 
@@ -209,5 +241,57 @@ ${serperResults.text}
       console.error(`[Gemini] FATAL: Fallback to Groq also failed: ${groqError.message}`);
       throw new Error("All AI services failed. Please check your connection or API keys.");
     }
+  }
+
+
+
+}
+
+export async function refineInputText(text: string, contextType: string = 'general'): Promise<string> {
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY ||
+    import.meta.env.VITE_API_KEY ||
+    process.env.API_KEY ||
+    process.env.NEXT_PUBLIC_GEMINI_API_KEY ||
+    process.env.NEXT_PUBLIC_API_KEY;
+
+  if (!apiKey) {
+    console.warn("Gemini API Key missing for refinement.");
+    return text;
+  }
+
+  const ai = new GoogleGenAI({ apiKey: apiKey });
+
+  const prompt = `
+    Role: Expert Technical Writer & Product Manager.
+    Task: Refine the following user input to be professional, clear, and structured.
+    Context: ${contextType} (Product Discovery App).
+    
+    Rules:
+    1. Fix grammar and spelling.
+    2. Remove conversational fluff.
+    3. Use bullet points or concise paragraphs where appropriate.
+    4. Maintain the original meaning and intent.
+    5. Return ONLY the refined text.
+    
+    Input:
+    "${text}"
+  `;
+
+  try {
+    const result = await ai.models.generateContent({
+      model: GEMINI_MODELS.FLASH,
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      config: { temperature: 0.3 }
+    });
+
+    const candidate = result.candidates?.[0];
+    if (candidate && candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
+      return candidate.content.parts[0].text ? candidate.content.parts[0].text.trim() : text;
+    }
+    return text;
+
+  } catch (error) {
+    console.error("Refinement Failed:", error);
+    return text; // Return original if failed
   }
 }

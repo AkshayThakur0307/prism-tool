@@ -16,14 +16,16 @@ export class HybridVoiceAssistant {
     private groq: Groq;
     private handlers: VoiceHandlers;
     private appState: AppState;
+    private customContext?: string;
     private mediaRecorder: MediaRecorder | null = null;
     private chunks: Blob[] = [];
     private isProcessing = false;
 
-    constructor(handlers: VoiceHandlers, appState: AppState) {
+    constructor(handlers: VoiceHandlers, appState: AppState, customContext?: string) {
         this.groq = new Groq({ apiKey: import.meta.env.VITE_GROQ_API_KEY || process.env.GROQ_API_KEY || '', dangerouslyAllowBrowser: true });
         this.handlers = handlers;
         this.appState = appState;
+        this.customContext = customContext;
     }
 
     async start() {
@@ -84,6 +86,7 @@ export class HybridVoiceAssistant {
                 You are the PRSIM.AI Discovery Voice Assistant.
                 Current Module: ${this.appState.currentStage} (${STAGE_CONFIGS[this.appState.currentStage].title})
                 Current Text Input: "${currentStageData.input}"
+                ${this.customContext ? `\nFOCUS CONTEXT (User is viewing this output): \n"${this.customContext}"\n` : ''}
                 ${questionsContext}
                 
                 GOAL:

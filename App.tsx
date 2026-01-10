@@ -9,6 +9,7 @@ import { jiraService } from './services/jiraService';
 import { createLiveAssistant } from './services/liveService';
 import { HybridVoiceAssistant } from './services/groqVoiceService';
 import { VoiceInputTrigger } from './components/VoiceInputTrigger';
+import { RefineInputButton } from './components/RefineInputButton';
 import MarkdownRenderer from './components/MarkdownRenderer';
 import PresentationView from './components/PresentationView';
 import ChatBot from './components/ChatBot';
@@ -97,6 +98,7 @@ const App: React.FC = () => {
   const [refinementChatHistory, setRefinementChatHistory] = useState<Array<{ role: 'user' | 'ai', text: string }>>([]);
   const [refinementInput, setRefinementInput] = useState('');
   const [isRefining, setIsRefining] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   // Generate a consistent random ID for this session
   const sessionId = useMemo(() => Math.floor(100 + Math.random() * 900), []);
@@ -278,7 +280,7 @@ const App: React.FC = () => {
 
   // Separate handler for Field-Level Voice Triggers (Microphone Buttons)
   // This uses the Hybrid (Gemini -> Groq) non-streaming assistant for specific updates
-  const handleFieldVoice = () => {
+  const handleFieldVoice = (customContext?: string) => {
     if (liveSessionRef.current) {
       // If already running (Stop it)
       if (liveSessionRef.current.stop) liveSessionRef.current.stop();
@@ -321,7 +323,7 @@ const App: React.FC = () => {
         setVoice(v => ({ ...v, transcript: text }));
       },
       onStateChange: (s) => setVoice(v => ({ ...v, ...s }))
-    }, state);
+    }, state, customContext);
 
     // Start listening
     (liveSessionRef.current as any).start();
@@ -580,17 +582,36 @@ GLOBAL PROJECT CONTEXT:
       let userPrompt = `
 ${metadataContext}
 
-CURRENT STAGE INPUT: ${stageData.input}
-STAGE HISTORY: ${prevContext}
+=== ACTIVE TASK INPUT (FOCUS HERE) ===
+"${stageData.input}"
+======================================
+
+=== MODULE CONTEXT (USE FOR SEARCH RELEVANCE) ===
+Stage: ${STAGE_CONFIGS[targetStage].title}
+Company: ${state.projectMetadata.companyName || 'Generic Product'}
+Vertical: ${state.projectMetadata.targetVertical || 'General'}
+=================================================
+
+=== BACKGROUND HISTORY (READ-ONLY CONTEXT) ===
+NOTE: The following history is for context only. DO NOT perform searches based on errors, logs, or issues found in this history unless explicitly requested in the Active Task Input.
+${prevContext}
+==============================================
+
 USER RESPONSES TO CLARIFICATIONS: ${JSON.stringify(filteredAnswers)}
 
 STAGE-SPECIFIC REFERENCE URLS:
 ${(stageData.urls || []).join('\n')}
 
-CRITICAL: If any visual assets (images or videos) or website URLs are provided, analyze them deeply. 
-Extract UI components, user interactions, process flows, or product features visible in the assets 
-and integrate these insights into the current discovery stage output. 
-Use the Stage-Specific Reference URLs provided to gather deep technical or business context.
+CRITICAL INSTRUCTIONS:
+1. Analyze the "ACTIVE TASK INPUT" deeply. This is your primary directive.
+2. Use "BACKGROUND HISTORY" only to maintain consistency (names, goals). Ignore technical errors in history.
+3. If visual assets or URLs are provided, analyze them for UI/UX and feature details.
+
+SEARCH GUIDANCE (STRICT):
+When using Google Search:
+- Generate queries based ONLY on "ACTIVE TASK INPUT" and "GLOBAL PROJECT CONTEXT".
+- ABSOLUTELY DO NOT search for "MSBuild", "error codes", "compilation failures", or "system logs" found in history.
+- Search for: "Market size of...", "Competitors to...", "Technical architecture for...", "API documentation for...".
       `;
 
       if (stageData.formatReference) {
@@ -859,7 +880,28 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
   const exportData = async (type: 'md' | 'web' | 'pdf') => {
     if (!currentStageData.output) return;
 
-    const fullHtml = await marked.parse(currentStageData.output);
+    let fullHtml = await marked.parse(currentStageData.output);
+
+    // Append Audit Trail (Grounding Sources)
+    if (currentStageData.groundingSources && currentStageData.groundingSources.length > 0) {
+      fullHtml += `
+        <div style="margin-top: 40px; border-top: 2px solid #e2e8f0; padding-top: 20px;">
+          <h3>Audit Trail & Verified References</h3>
+          <ul style="list-style: none; padding-left: 0;">
+            ${currentStageData.groundingSources.map(source => `
+              <li style="margin-bottom: 8px;">
+                <a href="${source.uri}" target="_blank" style="color: #4f46e5; text-decoration: none; font-weight: 600; font-size: 12px;">
+                  ${source.title || source.uri}
+                </a>
+                <div style="font-size: 10px; color: #64748b; margin-top: 2px;">
+                  Source: ${new URL(source.uri).hostname}
+                </div>
+              </li>
+            `).join('')}
+          </ul>
+        </div>
+      `;
+    }
     const styles = `
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
@@ -1259,106 +1301,87 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
 
           <div className="max-w-[1400px] mx-auto p-4 sm:p-5 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12 items-stretch min-h-full print:block relative z-30">
 
-            <div className="lg:col-span-5 xl:col-span-4 space-y-6 lg:space-y-8 flex flex-col print:hidden">
-              <div className="glass rounded-[2.5rem] p-6 sm:p-8 shadow-2xl border-slate-700/50">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400">Module Context</span>
-                    {voice.isActive && <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></div>}
-                    <VoiceInputTrigger
-                      onStart={handleFieldVoice}
-                      isListening={voice.isActive && !liveSessionRef.current} // Simple heuristic: active but not WebSocket session? Actually, handleFieldVoice toggles isActive.
-                      // Better: Check if liveSessionRef is instance of HybridVoiceAssistant?
-                      // For now, reuse voice.isActive, assuming global exclusivity.
-                      size="sm"
-                      className="ml-2"
-                    />
-                  </div>
-                  {state.currentStage !== DiscoveryStage.DOMAIN && (
-                    <button onClick={importPrevious} className="text-[10px] font-bold text-slate-500 hover:text-indigo-400 flex items-center gap-1.5 transition-colors group">
-                      <i className="fas fa-cloud-download-alt group-hover:animate-bounce"></i> Import History
-                    </button>
-                  )}
-                </div>
+            {isSidebarOpen && (
+              <div className="lg:col-span-5 space-y-6 lg:space-y-8 flex flex-col print:hidden animate-in slide-in-from-left-4 duration-300">
+                <div className="glass rounded-[2.5rem] p-6 sm:p-8 shadow-2xl border-slate-700/50">
+                  <div className="flex items-center justify-between mb-6 gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400 whitespace-nowrap">Module Context</span>
+                    </div>
 
-                <textarea
-                  value={currentStageData.input}
-                  onChange={handleInputChange}
-                  placeholder={config.placeholder}
-                  className={`w-full h-48 sm:h-72 bg-slate-950/40 border rounded-2xl p-4 sm:p-5 text-sm text-slate-300 focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all resize-none shadow-inner font-light leading-relaxed
+                    <div className="flex items-center gap-3">
+                      {voice.isActive && <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></div>}
+                      <VoiceInputTrigger
+                        onStart={handleFieldVoice}
+                        isListening={voice.isActive && !liveSessionRef.current}
+                        size="sm"
+                      />
+                      <RefineInputButton
+                        text={currentStageData.input}
+                        onRefine={(newText) => handleInputChange({ target: { value: newText } } as any)}
+                        contextType={`Project Context for ${state.currentStage}`}
+                        size="sm"
+                      />
+                      {state.currentStage !== DiscoveryStage.DOMAIN && (
+                        <button
+                          onClick={importPrevious}
+                          title="Import History from previous modules"
+                          className="text-slate-500 hover:text-indigo-400 flex items-center justify-center transition-colors group border-l border-slate-700/50 pl-3 ml-1"
+                        >
+                          <i className="fas fa-cloud-download-alt text-sm group-hover:animate-bounce"></i>
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setIsSidebarOpen(false)}
+                        className="w-6 h-6 rounded-lg hover:bg-slate-800 flex items-center justify-center transition-colors group/collapse border-l border-slate-700/50 pl-2 ml-1"
+                        title="Collapse Sidebar"
+                      >
+                        <i className="fas fa-chevron-left text-xs text-slate-500 group-hover/collapse:text-white"></i>
+                      </button>
+                    </div>
+                  </div>
+
+                  <textarea
+                    value={currentStageData.input}
+                    onChange={handleInputChange}
+                    placeholder={config.placeholder}
+                    className={`w-full h-48 sm:h-72 bg-slate-950/40 border rounded-2xl p-4 sm:p-5 text-sm text-slate-300 focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all resize-none shadow-inner font-light leading-relaxed
                     ${voice.isActive ? 'border-indigo-500/30' : 'border-slate-800'}
                   `}
-                />
+                  />
 
-                {/* URL Management Interface */}
-                <div className="mt-6 space-y-4">
-                  <div className="flex items-center gap-2">
-                    <div className="relative flex-1 group">
-                      <input
-                        type="text"
-                        value={urlInput}
-                        onChange={(e) => setUrlInput(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleUrlAdd()}
-                        placeholder="Add reference URL..."
-                        className="w-full bg-slate-950/40 border border-slate-800 rounded-xl px-4 py-2.5 text-[11px] text-white outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500/50 transition-all placeholder:text-slate-600"
-                      />
-                    </div>
-                    <button
-                      onClick={handleUrlAdd}
-                      className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 hover:text-indigo-400 hover:border-indigo-500/50 transition-all"
-                    >
-                      <i className="fas fa-plus text-xs"></i>
-                    </button>
-                  </div>
-
-                  {currentStageData.urls && currentStageData.urls.length > 0 && (
-                    <div className="flex flex-wrap gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                      {currentStageData.urls.map((url, idx) => (
-                        <div key={idx} className="flex items-center gap-2 px-3 py-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-lg max-w-full">
-                          <i className="fas fa-link text-[10px] text-indigo-400 shrink-0"></i>
-                          <span className="text-[10px] font-bold text-slate-300 truncate max-w-[150px]">{url.replace(/^https?:\/\//, '')}</span>
-                          <button
-                            onClick={() => handleUrlRemove(url)}
-                            className="text-slate-500 hover:text-rose-500 transition-colors ml-1 shrink-0"
-                          >
-                            <i className="fas fa-times text-[10px]"></i>
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-8 space-y-4">
-                  <div>
-                    <div className="relative border-2 border-dashed border-slate-800 rounded-2xl p-4 group hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-all cursor-pointer text-center">
-                      <input type="file" multiple accept="image/*,video/*,application/pdf,text/plain" onChange={(e) => handleFileUpload(e)} className="absolute inset-0 opacity-0 cursor-pointer" title="Attach Stage Assets" />
-                      <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform">
-                        <i className="fas fa-plus text-slate-400 group-hover:text-indigo-400"></i>
+                  {/* URL Management Interface */}
+                  <div className="mt-6 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1 group">
+                        <input
+                          type="text"
+                          value={urlInput}
+                          onChange={(e) => setUrlInput(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleUrlAdd()}
+                          placeholder="Add reference URL..."
+                          className="w-full bg-slate-950/40 border border-slate-800 rounded-xl px-4 py-2.5 text-[11px] text-white outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500/50 transition-all placeholder:text-slate-600"
+                        />
                       </div>
-                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Attach Stage Assets</p>
+                      <button
+                        onClick={handleUrlAdd}
+                        className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 hover:text-indigo-400 hover:border-indigo-500/50 transition-all"
+                      >
+                        <i className="fas fa-plus text-xs"></i>
+                      </button>
                     </div>
 
-                    {/* DYNAMIC ASSET LIST */}
-                    {currentStageData.files.length > 0 && (
-                      <div className="mt-4 space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                        {currentStageData.files.map((file, idx) => (
-                          <div key={idx} className="flex items-center justify-between p-3 bg-slate-950/40 border border-slate-800 rounded-xl group transition-all hover:border-slate-700">
-                            <div className="flex items-center gap-3 min-w-0">
-                              <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center shrink-0">
-                                <i className={`fas ${file.mimeType.startsWith('image/') ? 'fa-image text-indigo-400' : file.mimeType.startsWith('video/') ? 'fa-video text-amber-400' : 'fa-file-alt text-slate-400'} text-xs`}></i>
-                              </div>
-                              <div className="min-w-0">
-                                <p className="text-[11px] font-bold text-slate-300 truncate">{file.name}</p>
-                                <p className="text-[9px] text-slate-500 uppercase tracking-tighter">{(file.size / 1024).toFixed(1)} KB</p>
-                              </div>
-                            </div>
+                    {currentStageData.urls && currentStageData.urls.length > 0 && (
+                      <div className="flex flex-wrap gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                        {currentStageData.urls.map((url, idx) => (
+                          <div key={idx} className="flex items-center gap-2 px-3 py-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-lg max-w-full">
+                            <i className="fas fa-link text-[10px] text-indigo-400 shrink-0"></i>
+                            <span className="text-[10px] font-bold text-slate-300 truncate max-w-[150px]">{url.replace(/^https?:\/\//, '')}</span>
                             <button
-                              onClick={() => removeFile(file.name)}
-                              className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 transition-all opacity-0 group-hover:opacity-100"
-                              title="Remove asset"
+                              onClick={() => handleUrlRemove(url)}
+                              className="text-slate-500 hover:text-rose-500 transition-colors ml-1 shrink-0"
                             >
-                              <i className="fas fa-times text-xs"></i>
+                              <i className="fas fa-times text-[10px]"></i>
                             </button>
                           </div>
                         ))}
@@ -1366,87 +1389,204 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
                     )}
                   </div>
 
-                  {state.currentStage !== DiscoveryStage.DOMAIN && (
-                    <div className="relative border-2 border-dashed border-slate-800 rounded-2xl p-4 group hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-all cursor-pointer text-center">
-                      {!currentStageData.formatReference ? (
-                        <>
-                          <input type="file" accept="image/*,video/*,application/pdf,text/plain" onChange={(e) => handleFileUpload(e, true)} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
-                          <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform">
-                            <i className="fas fa-file-signature text-slate-400 group-hover:text-indigo-400"></i>
-                          </div>
-                          <p className="text-[10px] font-bold text-slate-500 group-hover:text-indigo-400 uppercase tracking-widest transition-colors">Upload Format Reference</p>
-                        </>
-                      ) : (
-                        <div className="relative z-20">
-                          <div className="w-10 h-10 bg-emerald-600/20 rounded-full flex items-center justify-center mx-auto mb-2">
-                            <i className="fas fa-check-circle text-emerald-400"></i>
-                          </div>
-                          <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-2">Reference Locked</p>
-                          <div className="flex items-center justify-between gap-2 text-[9px] text-emerald-400 font-bold uppercase truncate px-3 py-1 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
-                            <span className="truncate">{currentStageData.formatReference.name}</span>
-                            <button
-                              type="button"
-                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeFormatReference(); }}
-                              className="text-emerald-500 hover:text-rose-500 transition-colors p-1 ml-2 relative z-30 pointer-events-auto"
-                              title="Remove reference"
-                            >
-                              <i className="fas fa-times-circle text-sm"></i>
-                            </button>
-                          </div>
+                  <div className="mt-8 space-y-4">
+                    <div>
+                      <div className="relative border-2 border-dashed border-slate-800 rounded-2xl p-4 group hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-all cursor-pointer text-center">
+                        <input type="file" multiple accept="image/*,video/*,application/pdf,text/plain" onChange={(e) => handleFileUpload(e)} className="absolute inset-0 opacity-0 cursor-pointer" title="Attach Stage Assets" />
+                        <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform">
+                          <i className="fas fa-plus text-slate-400 group-hover:text-indigo-400"></i>
+                        </div>
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Attach Stage Assets</p>
+                      </div>
+
+                      {/* DYNAMIC ASSET LIST */}
+                      {currentStageData.files.length > 0 && (
+                        <div className="mt-4 space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                          {currentStageData.files.map((file, idx) => (
+                            <div key={idx} className="flex items-center justify-between p-3 bg-slate-950/40 border border-slate-800 rounded-xl group transition-all hover:border-slate-700">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center shrink-0">
+                                  <i className={`fas ${file.mimeType.startsWith('image/') ? 'fa-image text-indigo-400' : file.mimeType.startsWith('video/') ? 'fa-video text-amber-400' : 'fa-file-alt text-slate-400'} text-xs`}></i>
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-[11px] font-bold text-slate-300 truncate">{file.name}</p>
+                                  <p className="text-[9px] text-slate-500 uppercase tracking-tighter">{(file.size / 1024).toFixed(1)} KB</p>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => removeFile(file.name)}
+                                className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 transition-all opacity-0 group-hover:opacity-100"
+                                title="Remove asset"
+                              >
+                                <i className="fas fa-times text-xs"></i>
+                              </button>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
+
+                    {state.currentStage !== DiscoveryStage.DOMAIN && (
+                      <div className="relative border-2 border-dashed border-slate-800 rounded-2xl p-4 group hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-all cursor-pointer text-center">
+                        {!currentStageData.formatReference ? (
+                          <>
+                            <input type="file" accept="image/*,video/*,application/pdf,text/plain" onChange={(e) => handleFileUpload(e, true)} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
+                            <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform">
+                              <i className="fas fa-file-signature text-slate-400 group-hover:text-indigo-400"></i>
+                            </div>
+                            <p className="text-[10px] font-bold text-slate-500 group-hover:text-indigo-400 uppercase tracking-widest transition-colors">Upload Format Reference</p>
+                          </>
+                        ) : (
+                          <div className="relative z-20">
+                            <div className="w-10 h-10 bg-emerald-600/20 rounded-full flex items-center justify-center mx-auto mb-2">
+                              <i className="fas fa-check-circle text-emerald-400"></i>
+                            </div>
+                            <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-2">Reference Locked</p>
+                            <div className="flex items-center justify-between gap-2 text-[9px] text-emerald-400 font-bold uppercase truncate px-3 py-1 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
+                              <span className="truncate">{currentStageData.formatReference.name}</span>
+                              <button
+                                type="button"
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeFormatReference(); }}
+                                className="text-emerald-500 hover:text-rose-500 transition-colors p-1 ml-2 relative z-30 pointer-events-auto"
+                                title="Remove reference"
+                              >
+                                <i className="fas fa-times-circle text-sm"></i>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-8 space-y-3">
+                    <div className="flex items-center justify-between p-3 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 transition-all hover:bg-indigo-500/10">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${isThinkingEnabled ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-500'}`}>
+                          <i className="fas fa-brain text-xs"></i>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-wider text-white leading-none">Thinking Mode</p>
+                          <p className="text-[8px] text-slate-500 mt-1 uppercase font-bold tracking-widest">Enhanced Synthesis</p>
+                        </div>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="sr-only peer"
+                          checked={isThinkingEnabled}
+                          onChange={(e) => setIsThinkingEnabled(e.target.checked)}
+                        />
+                        <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                      </label>
+                    </div>
+
+                    <div className="flex items-center justify-between p-3 rounded-2xl bg-amber-500/5 border border-amber-500/10 transition-all hover:bg-amber-500/10">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${isSearchEnabled ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-500'}`}>
+                          <i className="fas fa-search text-xs"></i>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-wider text-white leading-none">Research Grounding</p>
+                          <p className="text-[8px] text-slate-500 mt-1 uppercase font-bold tracking-widest">External Validation</p>
+                        </div>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="sr-only peer"
+                          checked={isSearchEnabled}
+                          onChange={(e) => setIsSearchEnabled(e.target.checked)}
+                        />
+                        <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
+                      </label>
+                    </div>
+                  </div>
+
+                  {!currentStageData.output && (
+                    <>
+                      <div className="mt-3 mb-4">
+                        <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-800/20 border border-slate-700/50 transition-all hover:bg-slate-800/40">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-800 text-slate-400">
+                              <i className="fas fa-microchip text-xs"></i>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-wider text-white leading-none">Intelligence Engine</p>
+                              <p className="text-[8px] text-slate-500 mt-1 uppercase font-bold tracking-widest">Select Model</p>
+                            </div>
+                          </div>
+                          <ModelSelector value={selectedModel} onChange={setSelectedModel} className="w-48" />
+                        </div>
+                      </div>
+                      <button
+                        onClick={runAnalysis}
+                        disabled={!!analyzingStage || (!currentStageData.input && currentStageData.files.length === 0)}
+                        className="w-full py-4 sm:py-5 btn-grad rounded-2xl text-[11px] sm:text-[12px] font-black uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          {analyzingStage === state.currentStage ? <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div> : <><i className="fas fa-wand-sparkles text-sm translate-y-[0.5px]"></i><span>{config.cta}</span></>}
+                        </div>
+                      </button>
+                    </>
                   )}
                 </div>
 
-                <div className="mt-8 space-y-3">
-                  <div className="flex items-center justify-between p-3 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 transition-all hover:bg-indigo-500/10">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${isThinkingEnabled ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-500'}`}>
-                        <i className="fas fa-brain text-xs"></i>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-wider text-white leading-none">Thinking Mode</p>
-                        <p className="text-[8px] text-slate-500 mt-1 uppercase font-bold tracking-widest">Enhanced Synthesis</p>
-                      </div>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="sr-only peer"
-                        checked={isThinkingEnabled}
-                        onChange={(e) => setIsThinkingEnabled(e.target.checked)}
-                      />
-                      <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                    </label>
-                  </div>
+                {currentStageData.output && (
+                  <div className="flex flex-col gap-6 animate-in slide-in-from-bottom-4 duration-700">
+                    {currentStageData.questions.length > 0 && (
+                      <div className={`glass rounded-[2rem] p-6 sm:p-8 border shadow-xl space-y-6 sm:space-y-8
+                      ${voice.isActive ? 'border-indigo-500/30 bg-indigo-500/10' : 'border-indigo-500/20 bg-indigo-500/5'}
+                    `}>
+                        <div>
+                          <div className="flex items-center gap-3 mb-6">
+                            <div className="w-8 h-8 bg-indigo-500/20 rounded-lg flex items-center justify-center"><i className="fas fa-lightbulb text-indigo-400 text-sm"></i></div>
+                            <div>
+                              <h3 className="text-xs font-black text-indigo-400 uppercase tracking-widest">Stage Refinement</h3>
+                              <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-tighter">AI Needs Clarity</p>
+                            </div>
 
-                  <div className="flex items-center justify-between p-3 rounded-2xl bg-amber-500/5 border border-amber-500/10 transition-all hover:bg-amber-500/10">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${isSearchEnabled ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-500'}`}>
-                        <i className="fas fa-search text-xs"></i>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-wider text-white leading-none">Research Grounding</p>
-                        <p className="text-[8px] text-slate-500 mt-1 uppercase font-bold tracking-widest">External Validation</p>
-                      </div>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="sr-only peer"
-                        checked={isSearchEnabled}
-                        onChange={(e) => setIsSearchEnabled(e.target.checked)}
-                      />
-                      <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
-                    </label>
-                  </div>
-                </div>
 
-                {!currentStageData.output && (
-                  <>
-                    <div className="mt-3 mb-4">
-                      <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-800/20 border border-slate-700/50 transition-all hover:bg-slate-800/40">
+                            {/* Removed Model Selector from Header */}
+                          </div>
+                          <div className="space-y-6">
+                            {currentStageData.questions.map((q, i) => (
+                              <div key={i} className="group relative">
+                                <div className="flex items-center justify-between mb-2">
+                                  <label className="block text-[10px] font-bold text-slate-400 leading-relaxed opacity-70 group-hover:opacity-100 transition-opacity">{q}</label>
+                                  <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <VoiceInputTrigger
+                                      onStart={handleFieldVoice}
+                                      isListening={voice.isActive && !liveSessionRef.current}
+                                      size="sm"
+                                    />
+                                    <RefineInputButton
+                                      text={currentStageData.answers[i.toString()] || ''}
+                                      onRefine={(newText) => handleAnswerChange(i, newText)}
+                                      contextType={`Answer to: ${q}`}
+                                      size="sm"
+                                    />
+                                  </div>
+                                </div>
+                                <textarea
+                                  rows={2}
+                                  value={currentStageData.answers[i.toString()] || ''}
+                                  onChange={(e) => handleAnswerChange(i, e.target.value)}
+                                  className={`w-full bg-slate-950/60 border rounded-xl p-3 text-[11px] text-white outline-none focus:ring-4 focus:ring-indigo-500/5 transition-all resize-none font-medium
+                                  ${voice.isActive ? 'border-indigo-500/40 shadow-[0_0_10px_rgba(99,102,241,0.1)]' : 'border-slate-800 focus:border-indigo-500/50'}
+                                `}
+                                  placeholder="Provide details..."
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* REGENERATION MODEL SELECTOR */}
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-800/40 border border-slate-700/50 transition-all hover:bg-slate-800/60">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-800 text-slate-400">
                             <i className="fas fa-microchip text-xs"></i>
@@ -1459,110 +1599,38 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
                         <ModelSelector value={selectedModel} onChange={setSelectedModel} className="w-48" />
                       </div>
                     </div>
+
                     <button
                       onClick={runAnalysis}
-                      disabled={!!analyzingStage || (!currentStageData.input && currentStageData.files.length === 0)}
-                      className="w-full py-4 sm:py-5 btn-grad rounded-2xl text-[11px] sm:text-[12px] font-black uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
+                      disabled={!!analyzingStage}
+                      className="w-full py-4 sm:py-5 btn-grad rounded-2xl text-[11px] sm:text-[12px] font-black uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed shadow-xl shadow-indigo-500/10"
                     >
                       <div className="flex items-center gap-2.5">
-                        {analyzingStage === state.currentStage ? <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div> : <><i className="fas fa-wand-sparkles text-sm translate-y-[0.5px]"></i><span>{config.cta}</span></>}
+                        {analyzingStage === state.currentStage ? (
+                          <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                        ) : (
+                          <>
+                            <i className="fas fa-rotate text-sm translate-y-[0.5px]"></i>
+                            <span>{config.regenerateCta || 'Re-Analyze Stage'}</span>
+                          </>
+                        )}
                       </div>
                     </button>
-                  </>
+                  </div>
                 )}
               </div>
+            )}
 
-              {currentStageData.output && (
-                <div className="flex flex-col gap-6 animate-in slide-in-from-bottom-4 duration-700">
-                  {currentStageData.questions.length > 0 && (
-                    <div className={`glass rounded-[2rem] p-6 sm:p-8 border shadow-xl space-y-6 sm:space-y-8
-                      ${voice.isActive ? 'border-indigo-500/30 bg-indigo-500/10' : 'border-indigo-500/20 bg-indigo-500/5'}
-                    `}>
-                      <div>
-                        <div className="flex items-center gap-3 mb-6">
-                          <div className="w-8 h-8 bg-indigo-500/20 rounded-lg flex items-center justify-center"><i className="fas fa-lightbulb text-indigo-400 text-sm"></i></div>
-                          <div>
-                            <h3 className="text-xs font-black text-indigo-400 uppercase tracking-widest">Stage Refinement</h3>
-                            <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-tighter">AI Needs Clarity</p>
-                          </div>
-                          <button
-                            onClick={resetCurrentStage}
-                            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors group relative"
-                            title="Reset Stage"
-                          >
-                            <i className="fas fa-rotate-left text-lg"></i>
-                            <span className="absolute top-full mt-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-800 text-xs text-slate-200 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none">
-                              Reset Stage
-                            </span>
-                          </button>
-
-                          {/* Removed Model Selector from Header */}
-                        </div>
-                        <div className="space-y-6">
-                          {currentStageData.questions.map((q, i) => (
-                            <div key={i} className="group relative">
-                              <div className="flex items-center justify-between mb-2">
-                                <label className="block text-[10px] font-bold text-slate-400 leading-relaxed opacity-70 group-hover:opacity-100 transition-opacity">{q}</label>
-                                <VoiceInputTrigger
-                                  onStart={handleFieldVoice}
-                                  isListening={voice.isActive && !liveSessionRef.current}
-                                  size="sm"
-                                  className="opacity-0 group-hover:opacity-100 transition-opacity"
-                                />
-                              </div>
-                              <textarea
-                                rows={2}
-                                value={currentStageData.answers[i.toString()] || ''}
-                                onChange={(e) => handleAnswerChange(i, e.target.value)}
-                                className={`w-full bg-slate-950/60 border rounded-xl p-3 text-[11px] text-white outline-none focus:ring-4 focus:ring-indigo-500/5 transition-all resize-none font-medium
-                                  ${voice.isActive ? 'border-indigo-500/40 shadow-[0_0_10px_rgba(99,102,241,0.1)]' : 'border-slate-800 focus:border-indigo-500/50'}
-                                `}
-                                placeholder="Provide details..."
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* REGENERATION MODEL SELECTOR */}
-                  <div className="mb-4">
-                    <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-800/40 border border-slate-700/50 transition-all hover:bg-slate-800/60">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-800 text-slate-400">
-                          <i className="fas fa-microchip text-xs"></i>
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-black uppercase tracking-wider text-white leading-none">Intelligence Engine</p>
-                          <p className="text-[8px] text-slate-500 mt-1 uppercase font-bold tracking-widest">Select Model</p>
-                        </div>
-                      </div>
-                      <ModelSelector value={selectedModel} onChange={setSelectedModel} className="w-48" />
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={runAnalysis}
-                    disabled={!!analyzingStage}
-                    className="w-full py-4 sm:py-5 btn-grad rounded-2xl text-[11px] sm:text-[12px] font-black uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed shadow-xl shadow-indigo-500/10"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      {analyzingStage === state.currentStage ? (
-                        <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                      ) : (
-                        <>
-                          <i className="fas fa-rotate text-sm translate-y-[0.5px]"></i>
-                          <span>{config.regenerateCta || 'Re-Analyze Stage'}</span>
-                        </>
-                      )}
-                    </div>
-                  </button>
-                </div>
+            <div className={`${isSidebarOpen ? 'lg:col-span-7' : 'lg:col-span-12'} flex flex-col gap-6 lg:gap-8 print:block relative transition-all duration-300`}>
+              {!isSidebarOpen && (
+                <button
+                  onClick={() => setIsSidebarOpen(true)}
+                  className="absolute -left-3 top-8 z-50 w-6 h-12 bg-indigo-600 rounded-r-xl flex items-center justify-center hover:bg-indigo-500 shadow-lg transition-all group"
+                  title="Expand Sidebar"
+                >
+                  <i className="fas fa-chevron-right text-xs text-white group-hover:scale-110 transition-transform"></i>
+                </button>
               )}
-            </div>
-
-            <div className="lg:col-span-7 xl:col-span-8 flex flex-col gap-6 lg:gap-8 print:block relative">
               {currentStageData.output ? (
                 <div className="animate-in fade-in slide-in-from-bottom-2 duration-1000">
                   {/* Analysis Briefing Header */}
@@ -1702,11 +1770,10 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
                           <>
                             <button
                               onClick={openRefinementModal}
-                              className="w-auto px-4 h-8 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white flex items-center gap-2 transition-all shadow-lg shadow-indigo-600/20"
+                              className="w-8 h-8 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center transition-all shadow-lg shadow-indigo-600/20 group"
                               title="Open AI Refinement Studio"
                             >
-                              <i className="fas fa-magic text-xs"></i>
-                              <span className="text-[10px] font-bold uppercase tracking-wider">AI Refine</span>
+                              <i className="fas fa-wand-magic-sparkles text-xs group-hover:animate-pulse"></i>
                             </button>
                             <button
                               onClick={activeEditMode}
@@ -1797,12 +1864,12 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
                               <span className="w-6 h-6 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-[10px] font-black text-amber-400">2</span>
                               <h6 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Intelligence Search Execution (The Query)</h6>
                             </div>
-                            <div className="bg-slate-950/80 p-6 rounded-3xl border border-slate-800 shadow-inner flex flex-col sm:flex-row items-center justify-between gap-6 transition-all hover:bg-slate-950">
-                              <div className="flex-1 min-w-0">
+                            <div className="bg-slate-950/80 p-6 rounded-3xl border border-slate-800 shadow-inner flex flex-col gap-4 transition-all hover:bg-slate-950">
+                              <div className="w-full">
                                 <p className="text-[11px] text-slate-400 leading-relaxed font-medium mb-1">Agent generated specific queries to validate current market data and technical benchmarks.</p>
                                 <p className="text-[9px] text-slate-600 font-bold uppercase tracking-widest">Engine: Google Grounding Pro</p>
                               </div>
-                              <div className="search-entry-container shrink-0">
+                              <div className="search-entry-container w-full overflow-x-auto custom-scrollbar pb-2">
                                 <div dangerouslySetInnerHTML={{ __html: currentStageData.searchEntryPointHtml }} />
                               </div>
                             </div>
@@ -1879,7 +1946,7 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
                   </div>
                 </div>
               ) : (
-                <div className="flex-1 flex flex-col items-center justify-center p-10 sm:p-20 text-center min-h-[60vh] relative overflow-hidden group">
+                <div className="flex-1 flex flex-col items-center justify-start pt-20 sm:pt-32 px-10 sm:px-20 text-center min-h-[60vh] relative overflow-hidden group">
                   {/* Decorative Elements for Empty State */}
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(99,102,241,0.05)_0%,transparent_70%)]"></div>
                   <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-indigo-500/5 rounded-full blur-[100px] opacity-0 group-hover:opacity-100 transition-opacity duration-1000"></div>
@@ -2128,7 +2195,18 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
                   <i className="fas fa-wand-magic-sparkles text-white text-sm"></i>
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-white uppercase tracking-wider">AI Refinement Studio</h3>
+                  <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-3">
+                    AI Refinement Studio
+                    {voice.isActive && (
+                      <div className="flex items-center gap-2 px-3 py-1 bg-rose-500/10 border border-rose-500/20 rounded-full animate-in fade-in slide-in-from-left-2">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                        </span>
+                        <span className="text-[9px] font-black text-rose-400 uppercase tracking-widest">Listening</span>
+                      </div>
+                    )}
+                  </h3>
                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Collaborative Editing Session</p>
                 </div>
               </div>
@@ -2224,7 +2302,7 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
                       className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 pr-12 text-xs text-white placeholder:text-slate-600 focus:border-indigo-500/50 outline-none resize-none h-24 transition-all"
                     />
                     <VoiceInputTrigger
-                      onStart={handleFieldVoice}
+                      onStart={() => handleFieldVoice(previewOutput || currentStageData.output)}
                       isListening={voice.isActive && !liveSessionRef.current}
                       size="md"
                       className="absolute bottom-3 right-12 shadow-lg"
