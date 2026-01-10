@@ -20,17 +20,32 @@ export async function callGeminiAgent(
   useSearch: boolean = false
 ): Promise<GeminiAgentResponse> {
   // 1. Determine Model ID
-  let modelToUse = typeof capabilityOrModel === 'string'
-    ? capabilityOrModel
-    : getModelForCapability(capabilityOrModel);
+  // 1. Determine Model ID
+  // Check if the input string acts as a known capability (e.g. 'analysis_main') and map it if so.
+  // Otherwise, treat it as a direct model ID (e.g. 'gemini-1.5-pro').
+  const knownCapabilities = Object.values(GeminiCapability) as string[];
+  let modelToUse = knownCapabilities.includes(capabilityOrModel)
+    ? getModelForCapability(capabilityOrModel as GeminiCapability)
+    : capabilityOrModel;
 
   // If thinking is enabled, override with the specific thinking model if not already set
   if (isThinking && !modelToUse.includes('thinking')) {
     modelToUse = getModelForCapability(GeminiCapability.REASONING);
   }
 
-  // Define API Client
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  // Define API Client - checking multiple common env var patterns for client-side compatibility
+  // Note: Vite uses import.meta.env.VITE_... by default. process.env requires explicit define in vite.config.ts.
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY ||
+    import.meta.env.VITE_API_KEY ||
+    process.env.API_KEY ||
+    process.env.NEXT_PUBLIC_GEMINI_API_KEY ||
+    process.env.NEXT_PUBLIC_API_KEY;
+
+  if (!apiKey) {
+    console.error("Gemini API Key is missing! Please set API_KEY, NEXT_PUBLIC_GEMINI_API_KEY, or VITE_GEMINI_API_KEY.");
+  }
+
+  const ai = new GoogleGenAI({ apiKey: apiKey || '' });
 
   // Prepare Content Parts
   const parts: any[] = [{ text: userPrompt }];
@@ -74,7 +89,11 @@ export async function callGeminiAgent(
     };
 
     if (isThinking) {
-      config.thinkingConfig = { thinkingBudget: 16384 }; // Adjusted budget
+      // 2026 Config for Gemini 3 Flash Thinking
+      config.thinkingConfig = {
+        includeThoughts: true,
+        thinkingLevel: "high"
+      };
     }
 
     if (useSearch) {

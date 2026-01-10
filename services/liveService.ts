@@ -10,8 +10,21 @@ export interface LiveHandlers {
   onError?: (error: any) => void;
 }
 
+import { GEMINI_MODELS } from './modelConfig';
+
 export function createLiveAssistant(handlers: LiveHandlers, currentQuestions: string[] = [], currentMainInput: string = "") {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  // Define API Client - checking multiple common env var patterns for client-side compatibility
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY ||
+    import.meta.env.VITE_API_KEY ||
+    process.env.API_KEY ||
+    process.env.NEXT_PUBLIC_GEMINI_API_KEY ||
+    process.env.NEXT_PUBLIC_API_KEY;
+
+  if (!apiKey) {
+    console.error("Gemini API Key is missing for Live Service!");
+  }
+
+  const ai = new GoogleGenAI({ apiKey: apiKey || '' });
   let nextStartTime = 0;
   let inputAudioContext: AudioContext | null = null;
   let outputAudioContext: AudioContext | null = null;
@@ -103,7 +116,7 @@ CRITICAL INSTRUCTIONS:
 5. Be concise and conversational. Confirm what you have updated.`;
 
   const sessionPromise = ai.live.connect({
-    model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+    model: GEMINI_MODELS.FLASH_EXP,
     config: {
       responseModalities: [Modality.AUDIO],
       tools: [{ functionDeclarations: tools }],

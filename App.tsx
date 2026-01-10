@@ -13,6 +13,7 @@ import PresentationView from './components/PresentationView';
 import ChatBot from './components/ChatBot';
 import ProductManual from './components/ProductManual';
 import { marked } from 'marked';
+import { useAuth } from './src/contexts/AuthContext';
 
 const INITIAL_METADATA: ProjectMetadata = {
   companyName: '',
@@ -37,6 +38,7 @@ const INITIAL_STATE: AppState = {
 };
 
 const App: React.FC = () => {
+  const { logout, user } = useAuth();
   const [state, setState] = useState<AppState>(INITIAL_STATE);
   const [analyzingStage, setAnalyzingStage] = useState<DiscoveryStage | null>(null);
   const [isThinkingEnabled, setIsThinkingEnabled] = useState(false);
@@ -57,8 +59,20 @@ const App: React.FC = () => {
     domain: (process.env as any).VITE_JIRA_DOMAIN || '',
     email: (process.env as any).VITE_JIRA_EMAIL || '',
     apiToken: (process.env as any).VITE_JIRA_API_TOKEN || '',
+    apiToken: (process.env as any).VITE_JIRA_API_TOKEN || '',
     projectKey: (process.env as any).VITE_JIRA_PROJECT_KEY || ''
   });
+
+  // Output Editing & Refinement
+  const [isEditingOutput, setIsEditingOutput] = useState(false);
+  const [tempOutput, setTempOutput] = useState('');
+
+  // Immersive Refinement Modal State
+  const [showRefinementModal, setShowRefinementModal] = useState(false);
+  const [previewOutput, setPreviewOutput] = useState(''); // Holds the provisional content in modal
+  const [refinementChatHistory, setRefinementChatHistory] = useState<Array<{ role: 'user' | 'ai', text: string }>>([]);
+  const [refinementInput, setRefinementInput] = useState('');
+  const [isRefining, setIsRefining] = useState(false);
 
   // Generate a consistent random ID for this session
   const sessionId = useMemo(() => Math.floor(100 + Math.random() * 900), []);
@@ -79,11 +93,8 @@ const App: React.FC = () => {
     return !!(m.companyName && m.targetVertical && m.geography && m.tam && m.revenueModel && m.websiteUrls && m.keyCompetitors);
   }, [state.projectMetadata]);
 
-  useEffect(() => {
-    if (!isMetadataComplete && !showProjectConfig) {
-      setShowProjectConfig(true);
-    }
-  }, [isMetadataComplete, showProjectConfig]);
+  // Metadata enforcement removed
+
 
   useEffect(() => {
     if (prevAnalyzingStageRef.current !== null && analyzingStage === null) {
@@ -459,9 +470,9 @@ const App: React.FC = () => {
   };
 
   const runAnalysis = async () => {
-    if (!isMetadataComplete) {
-      setShowProjectConfig(true);
-      return;
+    // Optional metadata check
+    if (!isMetadataComplete && !state.projectMetadata.companyName) {
+      console.log("Proceeding with partial/empty metadata");
     }
 
     const targetStage = state.currentStage;
@@ -481,14 +492,14 @@ const App: React.FC = () => {
 
       const metadataContext = `
 GLOBAL PROJECT CONTEXT:
-- Company Name: ${state.projectMetadata.companyName}
-- Mission: ${state.projectMetadata.missionStatement}
-- Target Vertical: ${state.projectMetadata.targetVertical}
-- Geography: ${state.projectMetadata.geography}
-- TAM: ${state.projectMetadata.tam}
-- Revenue Model: ${state.projectMetadata.revenueModel}
-- Global Websites: ${state.projectMetadata.websiteUrls}
-- Competitors: ${state.projectMetadata.keyCompetitors}
+- Company Name: ${state.projectMetadata.companyName || 'Not Provided'}
+- Mission: ${state.projectMetadata.missionStatement || 'Not Provided'}
+- Target Vertical: ${state.projectMetadata.targetVertical || 'Not Provided'}
+- Geography: ${state.projectMetadata.geography || 'Not Provided'}
+- TAM: ${state.projectMetadata.tam || 'Not Provided'}
+- Revenue Model: ${state.projectMetadata.revenueModel || 'Not Provided'}
+- Global Websites: ${state.projectMetadata.websiteUrls || 'Not Provided'}
+- Competitors: ${state.projectMetadata.keyCompetitors || 'Not Provided'}
       `;
 
       let userPrompt = `
@@ -576,6 +587,112 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
     } finally {
       setAnalyzingStage(current => current === targetStage ? null : current);
     }
+  };
+
+  // --- Refinement Modal Logic ---
+
+  const openRefinementModal = () => {
+    if (!currentStageData.output) return;
+    setPreviewOutput(currentStageData.output);
+    setRefinementChatHistory([{ role: 'ai', text: 'I am ready to help you refine this document. What would you like to change?' }]);
+    setRefinementInput('');
+    setShowRefinementModal(true);
+  };
+
+  const closeRefinementModal = () => {
+    if (window.confirm("Discard unsaved changes?")) {
+      setShowRefinementModal(false);
+      setPreviewOutput('');
+      setRefinementChatHistory([]);
+    }
+  };
+
+  const applyRefinement = () => {
+    setState(prev => ({
+      ...prev,
+      stages: {
+        ...prev.stages,
+        [state.currentStage]: {
+          ...prev.stages[state.currentStage],
+          output: previewOutput
+        }
+      }
+    }));
+    setShowRefinementModal(false);
+  };
+
+  const handleRefineChat = async () => {
+    if (!refinementInput.trim() || !previewOutput) return;
+
+    const userMessage = refinementInput.trim();
+    setRefinementChatHistory(prev => [...prev, { role: 'user', text: userMessage }]);
+    setRefinementInput('');
+    setIsRefining(true);
+
+    try {
+      const refineSystemInstruction = `You are an expert editor collaborating with a user on a document. 
+      Your task is to MODIFY the document content based on the user's latest instruction.
+      Maintain the original structure, tone, and formatting unless explicitly asked to change it.
+      
+      CRITICAL OUTPUT RULES:
+      1. You must output the FULL MODIFIED DOCUMENT CONTENT. Do not just output the changes.
+      2. Do not include any conversational preamble or explanation in the document output.
+      3. The user's goal is to improve the document iteratively.`;
+
+      const refineUserPrompt = `
+      CURRENT DOCUMENT CONTENT:
+      ${previewOutput}
+
+      USER INSTRUCTION:
+      ${userMessage}
+
+      Provide the fully updated document content below:
+      `;
+
+      // Using ANALYSIS_MAIN capability for high quality editing
+      const result = await callGeminiAgent(
+        GeminiCapability.ANALYSIS_MAIN,
+        refineSystemInstruction,
+        refineUserPrompt,
+        [],
+        false,
+        false
+      );
+
+      setPreviewOutput(result.text);
+      setRefinementChatHistory(prev => [...prev, { role: 'ai', text: "I've updated the document based on your request. Check the preview!" }]);
+
+    } catch (error: any) {
+      console.error("Refinement failed:", error);
+      alert(`Refinement Error: ${error.message || "Unknown error"}`);
+      setRefinementChatHistory(prev => [...prev, { role: 'ai', text: "Sorry, I encountered an error while processing your request. Please try again." }]);
+    } finally {
+      setIsRefining(false);
+    }
+  };
+
+  const activeEditMode = () => {
+    setTempOutput(currentStageData.output);
+    setIsEditingOutput(true);
+  };
+
+  const saveEdit = () => {
+    setState(prev => ({
+      ...prev,
+      stages: {
+        ...prev.stages,
+        [state.currentStage]: {
+          ...prev.stages[state.currentStage],
+          output: tempOutput
+        }
+      }
+    }));
+    setIsEditingOutput(false);
+  };
+
+  const cancelEdit = () => {
+    setIsEditingOutput(false);
+    setTempOutput('');
   };
 
   const revertToVersion = (version: StageVersion) => {
@@ -748,16 +865,12 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
             <button
               key={stage}
               onClick={() => {
-                if (isMetadataComplete) {
-                  setState(p => ({ ...p, currentStage: stage }));
-                  setIsMobileMenuOpen(false);
-                  setShowHistory(false);
-                }
+                setState(p => ({ ...p, currentStage: stage }));
+                setIsMobileMenuOpen(false);
+                setShowHistory(false);
               }}
-              disabled={!isMetadataComplete}
               className={`w-full text-left p-4 rounded-2xl transition-all duration-300 group relative flex items-center gap-4 overflow-hidden border
                 ${isActive ? 'bg-indigo-600/10 border-indigo-500/50 text-white shadow-inner' : 'hover:bg-slate-800/40 text-slate-500 border-transparent'}
-                ${!isMetadataComplete ? 'opacity-30 cursor-not-allowed' : ''}
               `}
             >
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm transition-all duration-500 shrink-0
@@ -784,6 +897,29 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
       </div>
 
       <div className="pt-6 border-t border-slate-800/50 mt-6 shrink-0">
+        {/* Auth Profile Section */}
+        <div className="p-3 rounded-2xl bg-slate-800/40 border border-slate-700/50 flex items-center gap-3 mb-3 relative group">
+          {user?.photoURL ? (
+            <img src={user.photoURL} alt="User" className="w-8 h-8 rounded-full border border-slate-600" />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold border border-indigo-400">
+              {user?.displayName ? user.displayName.charAt(0).toUpperCase() : 'U'}
+            </div>
+          )}
+          <div className="flex-1 min-w-0 transition-opacity duration-300 group-hover:opacity-40">
+            <div className="text-[11px] font-bold text-slate-200 truncate">{user?.displayName || 'Authorized User'}</div>
+            <div className="text-[9px] text-slate-500 truncate">{user?.email}</div>
+          </div>
+
+          <button
+            onClick={logout}
+            className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg bg-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 font-bold border border-rose-500/30"
+            title="Sign Out"
+          >
+            <i className="fas fa-sign-out-alt text-xs"></i>
+          </button>
+        </div>
+
         <div className="p-4 rounded-2xl bg-slate-950/50 border border-slate-800/50 text-[9px] text-slate-500 space-y-1">
           <div className="flex justify-between"><span>Compute</span> <span className="text-slate-400">Grok-3</span></div>
           <div className="flex justify-between"><span>Team</span> <span className="text-slate-400">M+ Product Team : Beta</span></div>
@@ -853,11 +989,10 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
           <div className="flex items-center gap-2 sm:gap-4 shrink-0">
             <button
               onClick={toggleVoice}
-              disabled={!isMetadataComplete}
               className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-all duration-500 border relative overflow-hidden group
                 ${voice.isActive ? 'bg-indigo-600 border-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:text-indigo-400'}
-                ${!isMetadataComplete ? 'opacity-30 cursor-not-allowed' : ''}
               `}
+
               title="Voice Assistant"
             >
               {voice.isSpeaking && <div className="absolute inset-0 bg-indigo-400/20 animate-pulse"></div>}
@@ -887,18 +1022,17 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
 
             <button
               onClick={() => setShowManual(true)}
-              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl btn-action flex items-center justify-center shrink-0"
-              title="Product Manual & FRD"
+              className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-indigo-400 hover:bg-slate-800 transition-all flex items-center justify-center group relative shadow-lg shadow-black/20"
+              title="User Manual"
             >
-              <i className="fas fa-book text-xs sm:text-sm text-indigo-400"></i>
+              <i className="fas fa-book text-[11px] group-hover:scale-110 transition-transform"></i>
             </button>
+
+
 
             <button
               onClick={resetCurrentStage}
-              disabled={!isMetadataComplete}
-              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl btn-reset flex items-center justify-center shrink-0 group relative overflow-hidden shadow-lg active:shadow-inner
-                ${!isMetadataComplete ? 'opacity-30 cursor-not-allowed' : ''}
-              `}
+              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl btn-reset flex items-center justify-center shrink-0 group relative overflow-hidden shadow-lg active:shadow-inner`}
               title="Reset Stage"
             >
               <i className="fas fa-redo-alt text-xs sm:text-sm group-active:rotate-180 transition-transform duration-500"></i>
@@ -1011,9 +1145,7 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
             </div>
           </div>
 
-          {!isMetadataComplete && (
-            <div className="absolute inset-0 z-40 bg-slate-950/40 backdrop-blur-[2px]"></div>
-          )}
+
 
           <div className="max-w-[1400px] mx-auto p-4 sm:p-5 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12 items-stretch min-h-full print:block relative z-30">
 
@@ -1280,14 +1412,17 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
                     </div>
 
                     <div className="flex flex-col items-end gap-2 w-full sm:w-auto border-t sm:border-t-0 border-slate-800 pt-4 sm:pt-0 group relative">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest cursor-help border-b border-dashed border-slate-700" title="Calculated based on Baseline Completeness, Input Depth, and Intelligence Leverage.">Coherence</span>
-                        <div className="w-32 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                          <div className="h-full bg-indigo-500 transition-all duration-[1.5s] ease-out" style={{ width: `${currentStageData.coherenceScore}%` }}></div>
+                      <div className="flex items-center gap-4">
+
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest cursor-help border-b border-dashed border-slate-700" title="Calculated based on Baseline Completeness, Input Depth, and Intelligence Leverage.">Coherence</span>
+                          <div className="w-24 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                            <div className="h-full bg-indigo-500 transition-all duration-[1.5s] ease-out" style={{ width: `${currentStageData.coherenceScore}%` }}></div>
+                          </div>
+                          <span className="text-[10px] font-black text-white uppercase tracking-widest ml-1">{currentStageData.coherenceScore}%</span>
                         </div>
-                        <span className="text-[10px] font-black text-white uppercase tracking-widest ml-1">{currentStageData.coherenceScore}%</span>
                       </div>
-                      <p className="text-[9px] text-slate-500 font-bold uppercase tracking-[0.2em]">{new Date().toLocaleDateString()} @ {new Date().toLocaleTimeString()}</p>
+                      <p className="text-[9px] text-slate-500 font-bold uppercase tracking-[0.2em] mt-1 text-right w-full">{new Date().toLocaleDateString()} @ {new Date().toLocaleTimeString()}</p>
                     </div>
                   </div>
 
@@ -1365,7 +1500,6 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
                               />
                             </div>
                           </div>
-
                           <div className="pt-4 border-t border-slate-800/50 flex flex-col sm:flex-row items-center justify-between gap-4">
                             <p className="text-[10px] text-slate-500 italic max-w-sm">
                               {isJiraSyncing ? (
@@ -1390,19 +1524,71 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
                   )}
 
                   {/* Main Content Sections */}
-                  <div className="space-y-8">
-                    {structuredBlocks.map((block, idx) => (
-                      <div key={idx} className="report-card animate-in fade-in slide-in-from-bottom-4 duration-700" style={{ animationDelay: `${idx * 0.1}s` }}>
-                        <div className="flex justify-between items-start mb-6 -mt-2">
-                          <span className="text-[9px] font-black text-slate-600 uppercase tracking-[0.4em]">Section 0{idx + 1}</span>
-                          <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button className="text-slate-500 hover:text-indigo-400 p-1 transition-colors"><i className="fas fa-copy text-xs"></i></button>
+                  <div className="relative group">
+                    {/* Content Actions Toolbar (Floating Overlay) */}
+                    <div className="sticky top-2 z-30 flex justify-end px-2 h-0 overflow-visible pointer-events-none">
+                      <div className="pointer-events-auto flex items-center gap-2 p-1.5 rounded-xl bg-slate-950 translate-y-3 mr-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                        {!isEditingOutput ? (
+                          <>
+                            <button
+                              onClick={openRefinementModal}
+                              className="w-auto px-4 h-8 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white flex items-center gap-2 transition-all shadow-lg shadow-indigo-600/20"
+                              title="Open AI Refinement Studio"
+                            >
+                              <i className="fas fa-magic text-xs"></i>
+                              <span className="text-[10px] font-bold uppercase tracking-wider">AI Refine</span>
+                            </button>
+                            <button
+                              onClick={activeEditMode}
+                              className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 hover:text-white text-slate-400 flex items-center justify-center transition-all"
+                              title="Manual Edit"
+                            >
+                              <i className="fas fa-pencil-alt text-xs"></i>
+                            </button>
+                          </>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={cancelEdit}
+                              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[10px] font-bold text-slate-400 hover:text-white uppercase tracking-wider transition-all"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={saveEdit}
+                              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-[10px] font-bold text-white uppercase tracking-wider transition-all shadow-lg shadow-emerald-600/20"
+                            >
+                              Save Changes
+                            </button>
                           </div>
-                        </div>
-                        <MarkdownRenderer content={block} />
+                        )}
                       </div>
-                    ))}
+                    </div>
+
+                    {isEditingOutput ? (
+                      <div className="animate-in fade-in zoom-in-95 duration-200">
+                        <textarea
+                          value={tempOutput}
+                          onChange={(e) => setTempOutput(e.target.value)}
+                          className="w-full h-[60vh] bg-slate-950/40 border border-indigo-500/30 rounded-2xl p-6 md:p-8 text-sm md:text-base text-slate-300 font-mono leading-relaxed outline-none focus:ring-4 focus:ring-indigo-500/10 shadow-inner resize-none pt-14"
+                          placeholder="Edit your analysis..."
+                        />
+                      </div>
+                    ) : (
+                      <div className="space-y-8">
+                        {structuredBlocks.map((block, idx) => (
+                          <div key={idx} className="report-card animate-in fade-in slide-in-from-bottom-4 duration-700" style={{ animationDelay: `${idx * 0.1}s` }}>
+                            <div className="flex justify-between items-start mb-6 -mt-2">
+                              <span className="text-[9px] font-black text-slate-600 uppercase tracking-[0.4em]">Section 0{idx + 1}</span>
+                            </div>
+                            <MarkdownRenderer content={block} />
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
+
+                  {/* Refinement Studio Inline Box REMOVED - Replaced by Modal */}
 
                   {/* COMPLETE AUDIT TRAIL: Intent -> Query -> Result */}
                   {(currentStageData.groundingSources || currentStageData.searchEntryPointHtml || (currentStageData.urls && currentStageData.urls.length > 0)) && (
@@ -1563,8 +1749,8 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
               )}
             </div>
           </div>
-        </div>
-      </main>
+        </div >
+      </main >
 
       {analyzingStage && (
         <div className="fixed inset-0 z-[200] bg-[#020617]/95 backdrop-blur-3xl flex items-center justify-center p-6 animate-in fade-in duration-500">
@@ -1601,141 +1787,154 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
         </div>
       )}
 
-      {showProjectConfig && (
-        <div className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-xl flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-[3rem] w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-300">
-            <div className="p-8 sm:p-12 border-b border-slate-800 flex justify-between items-center bg-slate-900/60">
-              <div className="flex-1 pr-6">
-                <h2 className="text-3xl font-black text-white uppercase tracking-tighter mb-1">Strategic Baseline</h2>
-                <p className="text-xs text-indigo-400 font-bold uppercase tracking-[0.2em]">Mandatory Project Context</p>
-              </div>
+      {
+        showProjectConfig && (
+          <div className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-xl flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-[3rem] w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-300">
+              <div className="p-8 sm:p-12 border-b border-slate-800 flex justify-between items-center bg-slate-900/60">
+                <div className="flex-1 pr-6">
+                  <h2 className="text-3xl font-black text-white uppercase tracking-tighter mb-1">Strategic Baseline</h2>
+                  <p className="text-xs text-indigo-400 font-bold uppercase tracking-[0.2em]">Optional Project Context</p>
+                </div>
 
-              <div className="flex items-center gap-4 shrink-0 border-l border-slate-800 pl-8">
-                <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-indigo-600/40">
-                  <i className="fas fa-layer-group text-white text-2xl"></i>
-                </div>
-                <div className="hidden sm:block">
-                  <div className="text-base font-black text-white tracking-tighter uppercase leading-none">DISCOVERY PRO</div>
-                  <div className="text-[10px] text-indigo-400 font-bold tracking-[0.15em] mt-2 uppercase opacity-80">PRSIM.AI Material +</div>
-                </div>
-              </div>
-            </div>
+                <div className="flex items-center gap-6 shrink-0">
 
-            <div className="flex-1 overflow-y-auto p-8 sm:p-12 space-y-10">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-3">
-                  <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">Company Name *</label>
-                  <input
-                    type="text"
-                    value={state.projectMetadata.companyName}
-                    onChange={(e) => handleMetadataChange('companyName', e.target.value)}
-                    className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all"
-                    placeholder="e.g. Material+"
-                  />
-                </div>
-                <div className="space-y-3">
-                  <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">Target Vertical *</label>
-                  <input
-                    type="text"
-                    value={state.projectMetadata.targetVertical}
-                    onChange={(e) => handleMetadataChange('targetVertical', e.target.value)}
-                    className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all"
-                    placeholder="e.g. Fintech, Media, Sports"
-                  />
-                </div>
-                <div className="space-y-3">
-                  <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">Geography *</label>
-                  <input
-                    type="text"
-                    value={state.projectMetadata.geography}
-                    onChange={(e) => handleMetadataChange('geography', e.target.value)}
-                    className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all"
-                    placeholder="e.g. NA, EMEA, Global..."
-                  />
-                </div>
-                <div className="space-y-3">
-                  <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">TAM / Market Focus *</label>
-                  <input
-                    type="text"
-                    value={state.projectMetadata.tam}
-                    onChange={(e) => handleMetadataChange('tam', e.target.value)}
-                    className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all"
-                    placeholder="Market size or growth goal..."
-                  />
-                </div>
-                <div className="space-y-3">
-                  <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">Revenue Model *</label>
-                  <input
-                    type="text"
-                    value={state.projectMetadata.revenueModel}
-                    onChange={(e) => handleMetadataChange('revenueModel', e.target.value)}
-                    className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all"
-                    placeholder="e.g. Subscription, Ad-led..."
-                  />
-                </div>
-                <div className="space-y-3">
-                  <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">Web Presence / References *</label>
-                  <input
-                    type="text"
-                    value={state.projectMetadata.websiteUrls}
-                    onChange={(e) => handleMetadataChange('websiteUrls', e.target.value)}
-                    className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all"
-                    placeholder="URLs for business context..."
-                  />
+
+                  <div className="hidden sm:flex items-center gap-4 border-l border-slate-800 pl-8">
+                    <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-indigo-600/40">
+                      <i className="fas fa-layer-group text-white text-2xl"></i>
+                    </div>
+                    <div>
+                      <div className="text-base font-black text-white tracking-tighter uppercase leading-none">DISCOVERY PRO</div>
+                      <div className="text-[10px] text-indigo-400 font-bold tracking-[0.15em] mt-2 uppercase opacity-80">PRSIM.AI Material +</div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-3">
-                <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">Competitive Benchmark *</label>
-                <textarea
-                  rows={2}
-                  value={state.projectMetadata.keyCompetitors}
-                  onChange={(e) => handleMetadataChange('keyCompetitors', e.target.value)}
-                  className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all resize-none"
-                  placeholder="Who are we competing with?"
-                />
+              <div className="flex-1 overflow-y-auto p-8 sm:p-12 space-y-10">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-3">
+                    <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">Company Name</label>
+                    <input
+                      type="text"
+                      value={state.projectMetadata.companyName}
+                      onChange={(e) => handleMetadataChange('companyName', e.target.value)}
+                      className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all"
+                      placeholder="e.g. Material+"
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">Target Vertical</label>
+                    <input
+                      type="text"
+                      value={state.projectMetadata.targetVertical}
+                      onChange={(e) => handleMetadataChange('targetVertical', e.target.value)}
+                      className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all"
+                      placeholder="e.g. Fintech, Media, Sports"
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">Geography</label>
+                    <input
+                      type="text"
+                      value={state.projectMetadata.geography}
+                      onChange={(e) => handleMetadataChange('geography', e.target.value)}
+                      className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all"
+                      placeholder="e.g. NA, EMEA, Global..."
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">TAM / Market Focus</label>
+                    <input
+                      type="text"
+                      value={state.projectMetadata.tam}
+                      onChange={(e) => handleMetadataChange('tam', e.target.value)}
+                      className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all"
+                      placeholder="Market size or growth goal..."
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">Revenue Model</label>
+                    <input
+                      type="text"
+                      value={state.projectMetadata.revenueModel}
+                      onChange={(e) => handleMetadataChange('revenueModel', e.target.value)}
+                      className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all"
+                      placeholder="e.g. Subscription, Ad-led..."
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">Web Presence / References</label>
+                    <input
+                      type="text"
+                      value={state.projectMetadata.websiteUrls}
+                      onChange={(e) => handleMetadataChange('websiteUrls', e.target.value)}
+                      className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all"
+                      placeholder="URLs for business context..."
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">Competitive Benchmark</label>
+                  <textarea
+                    rows={2}
+                    value={state.projectMetadata.keyCompetitors}
+                    onChange={(e) => handleMetadataChange('keyCompetitors', e.target.value)}
+                    className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all resize-none"
+                    placeholder="Who are we competing with?"
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">Core Mission</label>
+                  <textarea
+                    rows={3}
+                    value={state.projectMetadata.missionStatement}
+                    onChange={(e) => handleMetadataChange('missionStatement', e.target.value)}
+                    className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all resize-none"
+                    placeholder="Ultimate vision for this project..."
+                  />
+                </div>
               </div>
 
-              <div className="space-y-3">
-                <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">Core Mission</label>
-                <textarea
-                  rows={3}
-                  value={state.projectMetadata.missionStatement}
-                  onChange={(e) => handleMetadataChange('missionStatement', e.target.value)}
-                  className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all resize-none"
-                  placeholder="Ultimate vision for this project..."
-                />
-              </div>
-            </div>
+              <div className="p-8 sm:p-12 border-t border-slate-800 bg-slate-950/40 flex flex-col sm:flex-row justify-between items-center gap-8">
+                <button
+                  onClick={() => setShowProjectConfig(false)}
+                  className="text-[11px] font-bold text-slate-500 uppercase tracking-widest hover:text-indigo-400 transition-colors flex items-center gap-2"
+                >
+                  Skip Optional Details <i className="fas fa-arrow-right"></i>
+                </button>
 
-            <div className="p-8 sm:p-12 border-t border-slate-800 bg-slate-950/40 flex flex-col sm:flex-row justify-between items-center gap-8">
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
-                {!isMetadataComplete ? <span className="text-rose-500">* All starred fields required</span> : <span className="text-emerald-500 flex items-center gap-2"><i className="fas fa-check"></i> Strategy Locked</span>}
-              </p>
-              <button
-                onClick={() => isMetadataComplete && setShowProjectConfig(false)}
-                disabled={!isMetadataComplete}
-                className="w-full sm:w-auto px-16 py-5 btn-grad rounded-[2rem] text-[12px] font-black uppercase tracking-[0.25em] disabled:opacity-30 transition-all hover:px-20"
-              >
-                Launch Workbench
-              </button>
+                <button
+                  onClick={() => setShowProjectConfig(false)}
+                  className="w-full sm:w-auto px-16 py-5 btn-grad rounded-[2rem] text-[12px] font-black uppercase tracking-[0.25em] transition-all hover:px-20 shadow-lg shadow-indigo-900/20"
+                >
+                  Launch Workbench
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
-      {isPresenting && (
-        <PresentationView
-          title={currentStageData.input.slice(0, 50) + "..."}
-          stageName={config.title}
-          content={currentStageData.output}
-          onClose={() => setIsPresenting(false)}
-        />
-      )}
+      {
+        isPresenting && (
+          <PresentationView
+            title={currentStageData.input.slice(0, 50) + "..."}
+            stageName={config.title}
+            content={currentStageData.output}
+            onClose={() => setIsPresenting(false)}
+          />
+        )
+      }
 
-      {showManual && (
-        <ProductManual onClose={() => setShowManual(false)} />
-      )}
+      {
+        showManual && (
+          <ProductManual onClose={() => setShowManual(false)} />
+        )
+      }
 
       <ChatBot appState={state} />
 
@@ -1747,6 +1946,113 @@ Use the Stage-Specific Reference URLs provided to gather deep technical or busin
         .search-entry-container a { color: #fbbf24 !important; text-decoration: none !important; font-weight: 800 !important; }
         .search-entry-container span { color: #94a3b8 !important; }
       `}</style>
+      {/* Immersive Refinement Modal */}
+      {showRefinementModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 sm:p-8 animate-in fade-in duration-300">
+          <div className="w-full h-full max-w-[95vw] bg-slate-950 rounded-3xl border border-slate-800 shadow-2xl flex flex-col overflow-hidden">
+
+            {/* Modal Header */}
+            <div className="h-16 border-b border-slate-800 flex items-center justify-between px-6 bg-slate-900/50 shrink-0">
+              <div className="flex items-center gap-4">
+                <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+                  <i className="fas fa-wand-magic-sparkles text-white text-sm"></i>
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white uppercase tracking-wider">AI Refinement Studio</h3>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Collaborative Editing Session</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={closeRefinementModal}
+                  className="px-4 py-2 rounded-xl text-[11px] font-bold text-slate-400 hover:text-white uppercase tracking-wider transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={applyRefinement}
+                  className="px-6 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-black uppercase tracking-wider shadow-lg shadow-emerald-600/20 transition-all flex items-center gap-2"
+                >
+                  <i className="fas fa-check"></i> Apply Changes
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body: Split View */}
+            <div className="flex-1 flex overflow-hidden">
+
+              {/* LEFT: Live Preview (65%) */}
+              <div className="flex-[2] border-r border-slate-800 bg-slate-950/50 flex flex-col min-w-0">
+                <div className="h-10 border-b border-slate-800/50 flex items-center px-6 bg-slate-900/30">
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Live Document Preview</span>
+                </div>
+                <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                  <div className="prose prose-invert max-w-none prose-sm">
+                    <MarkdownRenderer content={previewOutput} />
+                  </div>
+                </div>
+              </div>
+
+              {/* RIGHT: Chat Interface (35%) */}
+              <div className="flex-1 flex flex-col bg-slate-900/20 min-w-[350px]">
+                <div className="h-10 border-b border-slate-800/50 flex items-center px-6 bg-slate-900/30">
+                  <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">AI Editor Chat</span>
+                </div>
+
+                {/* Message History */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+                  {refinementChatHistory.map((msg, idx) => (
+                    <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[85%] rounded-2xl p-4 text-xs leading-relaxed ${msg.role === 'user'
+                        ? 'bg-indigo-600 text-white rounded-br-none'
+                        : 'bg-slate-800 text-slate-300 rounded-bl-none border border-slate-700'
+                        }`}>
+                        {msg.text}
+                      </div>
+                    </div>
+                  ))}
+                  {isRefining && (
+                    <div className="flex justify-start">
+                      <div className="bg-slate-800 rounded-2xl rounded-bl-none p-4 border border-slate-700 flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce"></div>
+                        <div className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                        <div className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Input Area */}
+                <div className="p-4 border-t border-slate-800 bg-slate-900/50">
+                  <div className="relative">
+                    <textarea
+                      value={refinementInput}
+                      onChange={(e) => setRefinementInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleRefineChat();
+                        }
+                      }}
+                      placeholder="Type instructions to refine the document..."
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 pr-12 text-xs text-white placeholder:text-slate-600 focus:border-indigo-500/50 outline-none resize-none h-24 transition-all"
+                    />
+                    <button
+                      onClick={handleRefineChat}
+                      disabled={isRefining || !refinementInput.trim()}
+                      className="absolute bottom-3 right-3 w-8 h-8 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                    >
+                      <i className="fas fa-paper-plane text-xs"></i>
+                    </button>
+                  </div>
+                  <p className="text-[9px] text-slate-600 mt-2 text-center">AI can make mistakes. Review the preview before applying.</p>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
