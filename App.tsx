@@ -1137,18 +1137,40 @@ When using Google Search:
               <p className="text-[9px] sm:text-[11px] text-slate-500 font-medium truncate hidden sm:block mt-1">{config.description}</p>
             </div>
           </div>
-
           <div className="flex items-center gap-2 sm:gap-4 shrink-0">
             <button
               onClick={toggleVoice}
               className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-all duration-500 border relative overflow-hidden group
                 ${voice.isActive ? 'bg-indigo-600 border-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:text-indigo-400'}
               `}
-
               title="Voice Assistant"
             >
               {voice.isSpeaking && <div className="absolute inset-0 bg-indigo-400/20 animate-pulse"></div>}
               <i className={`fas ${voice.isActive ? 'fa-microphone' : 'fa-microphone-slash'} text-xs sm:text-sm z-10 ${voice.isSpeaking ? 'animate-bounce' : ''}`}></i>
+            </button>
+
+            {/* STAGE SPECIFIC ACTIONS */}
+            {state.currentStage === DiscoveryStage.EPICS && currentStageData.status === 'completed' && (
+              <button
+                onClick={async () => {
+                  const { generateEpicsExcel } = await import('./services/excelService');
+                  generateEpicsExcel(currentStageData.output, `Epics_Estimation_${state.projectMetadata.companyName || 'Project'}.xlsx`);
+                }}
+                className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 text-xs font-medium transition-colors"
+                title="Export for Estimation"
+              >
+                <i className="fas fa-file-excel"></i>
+                <span>Excel Export</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => exportData('pdf')}
+              className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium transition-colors"
+              title="Export PDF"
+            >
+              <i className="fas fa-file-pdf"></i>
+              <span className="hidden sm:inline ml-2">PDF</span>
             </button>
 
             {currentStageData.output && (
@@ -1190,28 +1212,30 @@ When using Google Search:
               <i className="fas fa-redo-alt text-xs sm:text-sm group-active:rotate-180 transition-transform duration-500"></i>
             </button>
           </div>
-        </header>
+        </header >
 
-        {voice.isActive && (
-          <div className="bg-indigo-600/10 border-b border-indigo-500/20 px-6 py-2 flex items-center gap-4 animate-in slide-in-from-top-full duration-500 overflow-hidden print:hidden">
-            <div className="flex gap-1 h-3 items-end shrink-0">
-              {[1, 2, 3, 4, 5].map(i => (
-                <div key={i} className={`w-0.5 bg-indigo-500 rounded-full transition-all duration-300 ${voice.isSpeaking || voice.isListening ? 'animate-[bounce_1s_infinite]' : 'h-1'}`} style={{ animationDelay: `${i * 0.1}s`, height: voice.isSpeaking || voice.isListening ? '100%' : '20%' }}></div>
-              ))}
+        {
+          voice.isActive && (
+            <div className="bg-indigo-600/10 border-b border-indigo-500/20 px-6 py-2 flex items-center gap-4 animate-in slide-in-from-top-full duration-500 overflow-hidden print:hidden">
+              <div className="flex gap-1 h-3 items-end shrink-0">
+                {[1, 2, 3, 4, 5].map(i => (
+                  <div key={i} className={`w-0.5 bg-indigo-500 rounded-full transition-all duration-300 ${voice.isSpeaking || voice.isListening ? 'animate-[bounce_1s_infinite]' : 'h-1'}`} style={{ animationDelay: `${i * 0.1}s`, height: voice.isSpeaking || voice.isListening ? '100%' : '20%' }}></div>
+                ))}
+              </div>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400 shrink-0">Assistant Active</p>
+              <div className="h-4 w-px bg-indigo-500/20 shrink-0"></div>
+              <p className="text-[11px] text-slate-300 font-medium italic truncate flex-1">{voice.transcript || 'Listening...'}</p>
+              <button onClick={toggleVoice} className="text-[10px] font-bold text-rose-500 uppercase hover:text-rose-400 transition-colors px-2">Exit</button>
             </div>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400 shrink-0">Assistant Active</p>
-            <div className="h-4 w-px bg-indigo-500/20 shrink-0"></div>
-            <p className="text-[11px] text-slate-300 font-medium italic truncate flex-1">{voice.transcript || 'Listening...'}</p>
-            <button onClick={toggleVoice} className="text-[10px] font-bold text-rose-500 uppercase hover:text-rose-400 transition-colors px-2">Exit</button>
-          </div>
-        )}
+          )
+        }
 
-        <div
+        < div
           ref={mainScrollRef}
           className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_50%_-20%,#1e1b4b_0%,transparent_50%)] print:bg-white print:overflow-visible relative"
         >
           {/* VERSION HISTORY SIDE PANEL (Refined slide-over) */}
-          <div
+          < div
             className={`fixed inset-y-0 right-0 w-80 sm:w-96 z-[120] bg-slate-950/98 backdrop-blur-3xl border-l border-slate-800 shadow-[0_0_80px_rgba(0,0,0,0.9)] transition-transform duration-500 ease-in-out transform print:hidden flex flex-col
               ${showHistory ? 'translate-x-0' : 'translate-x-full'}
             `}
@@ -1295,7 +1319,7 @@ When using Google Search:
               <p className="text-[8px] text-slate-600 uppercase font-black tracking-[0.2em] mb-1">Iteration Engine v2.0</p>
               <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest opacity-60">Snapshots are retained locally</p>
             </div>
-          </div>
+          </div >
 
 
 
@@ -2184,146 +2208,148 @@ When using Google Search:
         .search-entry-container span { color: #94a3b8 !important; }
       `}</style>
       {/* Immersive Refinement Modal */}
-      {showRefinementModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 sm:p-8 animate-in fade-in duration-300">
-          <div className="w-full h-full max-w-[95vw] bg-slate-950 rounded-3xl border border-slate-800 shadow-2xl flex flex-col overflow-hidden">
+      {
+        showRefinementModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 sm:p-8 animate-in fade-in duration-300">
+            <div className="w-full h-full max-w-[95vw] bg-slate-950 rounded-3xl border border-slate-800 shadow-2xl flex flex-col overflow-hidden">
 
-            {/* Modal Header */}
-            <div className="h-16 border-b border-slate-800 flex items-center justify-between px-6 bg-slate-900/50 shrink-0">
-              <div className="flex items-center gap-4">
-                <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
-                  <i className="fas fa-wand-magic-sparkles text-white text-sm"></i>
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-3">
-                    AI Refinement Studio
-                    {voice.isActive && (
-                      <div className="flex items-center gap-2 px-3 py-1 bg-rose-500/10 border border-rose-500/20 rounded-full animate-in fade-in slide-in-from-left-2">
-                        <span className="relative flex h-2 w-2">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
-                        </span>
-                        <span className="text-[9px] font-black text-rose-400 uppercase tracking-widest">Listening</span>
-                      </div>
-                    )}
-                  </h3>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Collaborative Editing Session</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <ModelSelector
-                  value={selectedModel}
-                  onChange={setSelectedModel}
-                  className="w-40"
-                />
-                <button
-                  onClick={closeRefinementModal}
-                  className="px-4 py-2 rounded-xl text-[11px] font-bold text-slate-400 hover:text-white uppercase tracking-wider transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={applyRefinement}
-                  className="px-6 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-black uppercase tracking-wider shadow-lg shadow-emerald-600/20 transition-all flex items-center gap-2"
-                >
-                  <i className="fas fa-check"></i> Apply Changes
-                </button>
-              </div>
-            </div>
-
-            {/* Modal Body: Split View */}
-            <div className="flex-1 flex overflow-hidden">
-
-              {/* LEFT: Live Preview (65%) */}
-              <div className="flex-[2] border-r border-slate-800 bg-slate-950/50 flex flex-col min-w-0 relative">
-                {isRefining && (
-                  <div className="absolute inset-0 z-10 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center flex-col gap-4 animate-in fade-in duration-300">
-                    <div className="relative">
-                      <div className="w-12 h-12 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <i className="fas fa-magic text-indigo-400 text-xs animate-pulse"></i>
-                      </div>
-                    </div>
-                    <p className="text-xs font-bold text-indigo-400 uppercase tracking-widest animate-pulse">Refining Content...</p>
+              {/* Modal Header */}
+              <div className="h-16 border-b border-slate-800 flex items-center justify-between px-6 bg-slate-900/50 shrink-0">
+                <div className="flex items-center gap-4">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+                    <i className="fas fa-wand-magic-sparkles text-white text-sm"></i>
                   </div>
-                )}
-                <div className="h-10 border-b border-slate-800/50 flex items-center px-6 bg-slate-900/30">
-                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Live Document Preview</span>
-                </div>
-                <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-                  <div className={`prose prose-invert max-w-none prose-sm transition-opacity duration-300 ${isRefining ? 'opacity-30' : 'opacity-100'}`}>
-                    <MarkdownRenderer content={previewOutput} />
+                  <div>
+                    <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-3">
+                      AI Refinement Studio
+                      {voice.isActive && (
+                        <div className="flex items-center gap-2 px-3 py-1 bg-rose-500/10 border border-rose-500/20 rounded-full animate-in fade-in slide-in-from-left-2">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                          </span>
+                          <span className="text-[9px] font-black text-rose-400 uppercase tracking-widest">Listening</span>
+                        </div>
+                      )}
+                    </h3>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Collaborative Editing Session</p>
                   </div>
                 </div>
+                <div className="flex items-center gap-3">
+                  <ModelSelector
+                    value={selectedModel}
+                    onChange={setSelectedModel}
+                    className="w-40"
+                  />
+                  <button
+                    onClick={closeRefinementModal}
+                    className="px-4 py-2 rounded-xl text-[11px] font-bold text-slate-400 hover:text-white uppercase tracking-wider transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={applyRefinement}
+                    className="px-6 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-black uppercase tracking-wider shadow-lg shadow-emerald-600/20 transition-all flex items-center gap-2"
+                  >
+                    <i className="fas fa-check"></i> Apply Changes
+                  </button>
+                </div>
               </div>
 
-              {/* RIGHT: Chat Interface (35%) */}
-              <div className="flex-1 flex flex-col bg-slate-900/20 min-w-[350px]">
-                <div className="h-10 border-b border-slate-800/50 flex items-center px-6 bg-slate-900/30">
-                  <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">AI Editor Chat</span>
-                </div>
+              {/* Modal Body: Split View */}
+              <div className="flex-1 flex overflow-hidden">
 
-                {/* Message History */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-                  {refinementChatHistory.map((msg, idx) => (
-                    <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[85%] rounded-2xl p-4 text-xs leading-relaxed ${msg.role === 'user'
-                        ? 'bg-indigo-600 text-white rounded-br-none'
-                        : 'bg-slate-800 text-slate-300 rounded-bl-none border border-slate-700'
-                        }`}>
-                        {msg.text}
-                      </div>
-                    </div>
-                  ))}
+                {/* LEFT: Live Preview (65%) */}
+                <div className="flex-[2] border-r border-slate-800 bg-slate-950/50 flex flex-col min-w-0 relative">
                   {isRefining && (
-                    <div className="flex justify-start">
-                      <div className="bg-slate-800 rounded-2xl rounded-bl-none p-4 border border-slate-700 flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce"></div>
-                        <div className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                        <div className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                    <div className="absolute inset-0 z-10 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center flex-col gap-4 animate-in fade-in duration-300">
+                      <div className="relative">
+                        <div className="w-12 h-12 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <i className="fas fa-magic text-indigo-400 text-xs animate-pulse"></i>
+                        </div>
                       </div>
+                      <p className="text-xs font-bold text-indigo-400 uppercase tracking-widest animate-pulse">Refining Content...</p>
                     </div>
                   )}
-                </div>
-
-                {/* Input Area */}
-                <div className="p-4 border-t border-slate-800 bg-slate-900/50">
-                  <div className="relative">
-                    <textarea
-                      value={refinementInput}
-                      onChange={(e) => setRefinementInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          handleRefineChat();
-                        }
-                      }}
-                      placeholder="Type instructions to refine the document..."
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 pr-12 text-xs text-white placeholder:text-slate-600 focus:border-indigo-500/50 outline-none resize-none h-24 transition-all"
-                    />
-                    <VoiceInputTrigger
-                      onStart={() => handleFieldVoice(previewOutput || currentStageData.output)}
-                      isListening={voice.isActive && !liveSessionRef.current}
-                      size="md"
-                      className="absolute bottom-3 right-12 shadow-lg"
-                    />
-                    <button
-                      onClick={handleRefineChat}
-                      disabled={isRefining || !refinementInput.trim()}
-                      className="absolute bottom-3 right-3 w-8 h-8 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-                    >
-                      <i className="fas fa-paper-plane text-xs"></i>
-                    </button>
+                  <div className="h-10 border-b border-slate-800/50 flex items-center px-6 bg-slate-900/30">
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Live Document Preview</span>
                   </div>
-                  <p className="text-[9px] text-slate-600 mt-2 text-center">AI can make mistakes. Review the preview before applying.</p>
+                  <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                    <div className={`prose prose-invert max-w-none prose-sm transition-opacity duration-300 ${isRefining ? 'opacity-30' : 'opacity-100'}`}>
+                      <MarkdownRenderer content={previewOutput} />
+                    </div>
+                  </div>
                 </div>
-              </div>
 
+                {/* RIGHT: Chat Interface (35%) */}
+                <div className="flex-1 flex flex-col bg-slate-900/20 min-w-[350px]">
+                  <div className="h-10 border-b border-slate-800/50 flex items-center px-6 bg-slate-900/30">
+                    <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">AI Editor Chat</span>
+                  </div>
+
+                  {/* Message History */}
+                  <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+                    {refinementChatHistory.map((msg, idx) => (
+                      <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[85%] rounded-2xl p-4 text-xs leading-relaxed ${msg.role === 'user'
+                          ? 'bg-indigo-600 text-white rounded-br-none'
+                          : 'bg-slate-800 text-slate-300 rounded-bl-none border border-slate-700'
+                          }`}>
+                          {msg.text}
+                        </div>
+                      </div>
+                    ))}
+                    {isRefining && (
+                      <div className="flex justify-start">
+                        <div className="bg-slate-800 rounded-2xl rounded-bl-none p-4 border border-slate-700 flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce"></div>
+                          <div className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                          <div className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Input Area */}
+                  <div className="p-4 border-t border-slate-800 bg-slate-900/50">
+                    <div className="relative">
+                      <textarea
+                        value={refinementInput}
+                        onChange={(e) => setRefinementInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleRefineChat();
+                          }
+                        }}
+                        placeholder="Type instructions to refine the document..."
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 pr-12 text-xs text-white placeholder:text-slate-600 focus:border-indigo-500/50 outline-none resize-none h-24 transition-all"
+                      />
+                      <VoiceInputTrigger
+                        onStart={() => handleFieldVoice(previewOutput || currentStageData.output)}
+                        isListening={voice.isActive && !liveSessionRef.current}
+                        size="md"
+                        className="absolute bottom-3 right-12 shadow-lg"
+                      />
+                      <button
+                        onClick={handleRefineChat}
+                        disabled={isRefining || !refinementInput.trim()}
+                        className="absolute bottom-3 right-3 w-8 h-8 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                      >
+                        <i className="fas fa-paper-plane text-xs"></i>
+                      </button>
+                    </div>
+                    <p className="text-[9px] text-slate-600 mt-2 text-center">AI can make mistakes. Review the preview before applying.</p>
+                  </div>
+                </div>
+
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   );
 };
 
