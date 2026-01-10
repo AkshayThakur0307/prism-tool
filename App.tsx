@@ -59,7 +59,6 @@ const App: React.FC = () => {
     domain: (process.env as any).VITE_JIRA_DOMAIN || '',
     email: (process.env as any).VITE_JIRA_EMAIL || '',
     apiToken: (process.env as any).VITE_JIRA_API_TOKEN || '',
-    apiToken: (process.env as any).VITE_JIRA_API_TOKEN || '',
     projectKey: (process.env as any).VITE_JIRA_PROJECT_KEY || ''
   });
 

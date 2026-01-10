@@ -115,6 +115,18 @@ CRITICAL INSTRUCTIONS:
 4. If they want to move to another part of the process, use 'switchModule'.
 5. Be concise and conversational. Confirm what you have updated.`;
 
+  let isConnected = false;
+
+  const safeSend = (session: any, data: any) => {
+    if (!isConnected) return;
+    try {
+      session.sendRealtimeInput(data);
+    } catch (e) {
+      console.warn("Socket send failed", e);
+      isConnected = false;
+    }
+  };
+
   const sessionPromise = ai.live.connect({
     model: GEMINI_MODELS.FLASH_EXP,
     config: {
@@ -127,6 +139,7 @@ CRITICAL INSTRUCTIONS:
     },
     callbacks: {
       onopen: () => {
+        isConnected = true;
         handlers.onStateChange({ isListening: true, isSpeaking: false });
         navigator.mediaDevices.getUserMedia({ audio: true }).then(s => {
           stream = s;
@@ -134,8 +147,9 @@ CRITICAL INSTRUCTIONS:
           const source = inputAudioContext.createMediaStreamSource(s);
           const processor = inputAudioContext.createScriptProcessor(4096, 1, 1);
           processor.onaudioprocess = (e) => {
+            if (!isConnected) return;
             const pcm = createPCMData(e.inputBuffer.getChannelData(0));
-            sessionPromise.then(session => session.sendRealtimeInput({ media: pcm }));
+            sessionPromise.then(session => safeSend(session, { media: pcm }));
           };
           source.connect(processor);
           processor.connect(inputAudioContext.destination);
@@ -187,6 +201,7 @@ CRITICAL INSTRUCTIONS:
         }
       },
       onclose: () => {
+        isConnected = false;
         stream?.getTracks().forEach(t => t.stop());
         inputAudioContext?.close();
         outputAudioContext?.close();
