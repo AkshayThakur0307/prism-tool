@@ -124,6 +124,18 @@ const App: React.FC = () => {
     setShowProjectList(false);
   };
 
+  const handleProjectUpdated = (updatedProject: Project) => {
+    if (updatedProject.id === activeProjectId) {
+      setState(prev => ({
+        ...prev,
+        projectMetadata: {
+          ...prev.projectMetadata,
+          companyName: updatedProject.projectMetadata.companyName
+        }
+      }));
+    }
+  };
+
   // Auto-Save Project State
   useEffect(() => {
     if (!user || !activeProjectId) return;
@@ -2453,6 +2465,7 @@ When using Google Search:
           isOpen={showProjectList}
           onClose={() => setShowProjectList(false)}
           onSelectProject={loadProject}
+          onProjectUpdated={handleProjectUpdated}
           activeProjectId={activeProjectId}
         />
       )}

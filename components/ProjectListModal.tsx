@@ -8,10 +8,11 @@ interface ProjectListModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSelectProject: (project: Project) => void;
+    onProjectUpdated?: (project: Project) => void;
     activeProjectId: string | null;
 }
 
-const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, onSelectProject, activeProjectId }) => {
+const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, onSelectProject, onProjectUpdated, activeProjectId }) => {
     const { user } = useAuth();
     const [projects, setProjects] = useState<Project[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -81,11 +82,19 @@ const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, on
 
         try {
             await projectService.renameProject(editingProjectId, editingName);
-            setProjects(projects.map(p =>
-                p.id === editingProjectId
-                    ? { ...p, name: editingName, projectMetadata: { ...p.projectMetadata, companyName: editingName }, updatedAt: Date.now() }
-                    : p
-            ));
+
+            const updatedProject = projects.find(p => p.id === editingProjectId);
+            if (updatedProject) {
+                const newVersion = {
+                    ...updatedProject,
+                    name: editingName,
+                    projectMetadata: { ...updatedProject.projectMetadata, companyName: editingName },
+                    updatedAt: Date.now()
+                };
+
+                setProjects(projects.map(p => p.id === editingProjectId ? newVersion : p));
+                if (onProjectUpdated) onProjectUpdated(newVersion);
+            }
         } catch (e) {
             console.error("Failed to rename project", e);
         } finally {
