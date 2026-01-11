@@ -54,10 +54,25 @@ export interface StageData {
   coherenceScore: number;
 }
 
+export interface ProjectSettings {
+  isThinkingEnabled: boolean;
+  isSearchEnabled: boolean;
+}
+
 export interface AppState {
   currentStage: DiscoveryStage;
   projectMetadata: ProjectMetadata;
+  settings: ProjectSettings;
   stages: Record<DiscoveryStage, StageData>;
+}
+
+export interface Project extends AppState {
+  id: string;
+  userId: string;
+  userName?: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface VoiceState {

@@ -1,0 +1,225 @@
+
+import React, { useState, useEffect } from 'react';
+import { Project } from '../types';
+import { projectService } from '../services/projectService';
+import { useAuth } from '../src/contexts/AuthContext';
+
+interface ProjectListModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onSelectProject: (project: Project) => void;
+    activeProjectId: string | null;
+}
+
+const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, onSelectProject, activeProjectId }) => {
+    const { user } = useAuth();
+    const [projects, setProjects] = useState<Project[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [isCreating, setIsCreating] = useState(false);
+    const [newProjectName, setNewProjectName] = useState('');
+    const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+    const [editingName, setEditingName] = useState('');
+
+    useEffect(() => {
+        if (isOpen && user) {
+            loadProjects();
+        }
+    }, [isOpen, user]);
+
+    const loadProjects = async () => {
+        if (!user) return;
+        setIsLoading(true);
+        try {
+            const list = await projectService.getUserProjects(user.uid);
+            setProjects(list);
+        } catch (e) {
+            console.error("Failed to load projects", e);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleCreate = async () => {
+        if (!user) return;
+        setIsCreating(true);
+        try {
+            const metadata = newProjectName ? { projectMetadata: { companyName: newProjectName } } : undefined;
+            const newProject = await projectService.createProject(user.uid, user.displayName || user.email || 'Anonymous', metadata as any);
+            setProjects([newProject, ...projects]);
+            onSelectProject(newProject);
+            setNewProjectName('');
+        } catch (e) {
+            console.error("Failed to create project", e);
+        } finally {
+            setIsCreating(false);
+        }
+    };
+
+    const handleDelete = async (projectId: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!confirm("Are you sure you want to delete this project? This cannot be undone.")) return;
+
+        try {
+            await projectService.deleteProject(projectId);
+            setProjects(projects.filter(p => p.id !== projectId));
+        } catch (e) {
+            console.error("Failed to delete project", e);
+        }
+    };
+
+    const startEditing = (project: Project, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setEditingProjectId(project.id);
+        setEditingName(project.name || project.projectMetadata.companyName || '');
+    };
+
+    const saveRename = async () => {
+        if (!editingProjectId || !editingName.trim()) {
+            setEditingProjectId(null);
+            return;
+        }
+
+        try {
+            await projectService.renameProject(editingProjectId, editingName);
+            setProjects(projects.map(p =>
+                p.id === editingProjectId
+                    ? { ...p, name: editingName, projectMetadata: { ...p.projectMetadata, companyName: editingName }, updatedAt: Date.now() }
+                    : p
+            ));
+        } catch (e) {
+            console.error("Failed to rename project", e);
+        } finally {
+            setEditingProjectId(null);
+        }
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
+            <div className="bg-slate-900 border border-slate-700 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
+
+                {/* Header */}
+                <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-slate-950/50">
+                    <div>
+                        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                            <i className="fas fa-folder-open text-indigo-400"></i>
+                            My Projects
+                        </h2>
+                        <p className="text-sm text-slate-400 mt-1">Manage your discovery workspaces</p>
+                    </div>
+                    <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
+                        <i className="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-4">
+
+                    {/* Create New Block */}
+                    <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-4 flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-lg bg-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
+                            <i className="fas fa-plus"></i>
+                        </div>
+                        <input
+                            type="text"
+                            placeholder="Enter project name (e.g. Acme Corp Discovery)..."
+                            className="flex-1 bg-transparent border-none outline-none text-white placeholder-slate-500"
+                            value={newProjectName}
+                            onChange={(e) => setNewProjectName(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                        />
+                        <button
+                            onClick={handleCreate}
+                            disabled={isCreating}
+                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                        >
+                            {isCreating ? 'Creating...' : 'Create New'}
+                        </button>
+                    </div>
+
+                    {/* List */}
+                    {isLoading ? (
+                        <div className="text-center py-10 text-slate-500">
+                            <i className="fas fa-circle-notch fa-spin mr-2"></i> Loading projects...
+                        </div>
+                    ) : projects.length === 0 ? (
+                        <div className="text-center py-10 text-slate-500 border-2 border-dashed border-slate-800 rounded-xl">
+                            <p>No projects found. Start by creating one above.</p>
+                        </div>
+                    ) : (
+                        <div className="grid gap-3">
+                            {projects.map(project => (
+                                <div
+                                    key={project.id}
+                                    onClick={() => onSelectProject(project)}
+                                    className={`group p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between
+                                ${activeProjectId === project.id
+                                            ? 'bg-slate-800 border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
+                                            : 'bg-slate-800/40 border-slate-700/50 hover:border-slate-600 hover:bg-slate-800/60'}
+                            `}
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0
+                                    ${activeProjectId === project.id ? 'bg-indigo-500 text-white' : 'bg-slate-700 text-slate-400 group-hover:bg-slate-600 group-hover:text-white'}
+                                `}>
+                                            <i className="fas fa-cube"></i>
+                                        </div>
+                                        <div>
+                                            {editingProjectId === project.id ? (
+                                                <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                                                    <input
+                                                        type="text"
+                                                        value={editingName}
+                                                        onChange={(e) => setEditingName(e.target.value)}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') saveRename();
+                                                            if (e.key === 'Escape') setEditingProjectId(null);
+                                                        }}
+                                                        onBlur={saveRename}
+                                                        autoFocus
+                                                        className="bg-slate-950 border border-indigo-500/50 rounded px-2 py-1 text-sm text-white outline-none w-full min-w-[200px]"
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <h3 className={`font-medium ${activeProjectId === project.id ? 'text-white' : 'text-slate-200'}`}>
+                                                    {project.name || 'Untitled Project'}
+                                                </h3>
+                                            )}
+                                            <p className="text-xs text-slate-500">
+                                                Last updated: {new Date(project.updatedAt).toLocaleDateString()} at {new Date(project.updatedAt).toLocaleTimeString()}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button
+                                            onClick={(e) => startEditing(project, e)}
+                                            className="p-2 text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-colors"
+                                            title="Rename Project"
+                                        >
+                                            <i className="fas fa-pen"></i>
+                                        </button>
+                                        <button
+                                            onClick={(e) => handleDelete(project.id, e)}
+                                            className="p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+                                            title="Delete Project"
+                                        >
+                                            <i className="fas fa-trash-alt"></i>
+                                        </button>
+                                        <div className="text-indigo-400">
+                                            <i className="fas fa-chevron-right"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+            </div>
+        </div>
+    );
+};
+
+export default ProjectListModal;

@@ -1,8 +1,10 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { DiscoveryStage, AppState, FileContext, VoiceState, GroundingSource, ProjectMetadata, StageVersion } from './types';
+import { DiscoveryStage, AppState, FileContext, VoiceState, Project, ProjectMetadata, StageVersion, GroundingSource } from './types';
 import { STAGE_CONFIGS } from './constants';
 import { callGeminiAgent } from './services/geminiService';
+import { projectService } from './services/projectService';
+import { createDefaultProjectState } from './services/projectService';
 import { GeminiCapability } from './services/modelConfig';
 import { scrapeUrl } from './services/webScraper';
 import { jiraService } from './services/jiraService';
@@ -14,6 +16,7 @@ import MarkdownRenderer from './components/MarkdownRenderer';
 import PresentationView from './components/PresentationView';
 import ChatBot from './components/ChatBot';
 import ProductManual from './components/ProductManual';
+import ProjectListModal from './components/ProjectListModal';
 import { marked } from 'marked';
 import { useAuth } from './src/contexts/AuthContext';
 
@@ -31,6 +34,10 @@ const INITIAL_METADATA: ProjectMetadata = {
 const INITIAL_STATE: AppState = {
   currentStage: DiscoveryStage.DOMAIN,
   projectMetadata: INITIAL_METADATA,
+  settings: {
+    isThinkingEnabled: false,
+    isSearchEnabled: false,
+  },
   stages: {
     [DiscoveryStage.DOMAIN]: { input: '', output: '', files: [], urls: [], status: 'pending', questions: [], answers: {}, versions: [], coherenceScore: 0 },
     [DiscoveryStage.BOD]: { input: '', output: '', files: [], urls: [], status: 'pending', questions: [], answers: {}, versions: [], coherenceScore: 0 },
@@ -66,8 +73,6 @@ const App: React.FC = () => {
   const { logout, user } = useAuth();
   const [state, setState] = useState<AppState>(INITIAL_STATE);
   const [analyzingStage, setAnalyzingStage] = useState<DiscoveryStage | null>(null);
-  const [isThinkingEnabled, setIsThinkingEnabled] = useState(false);
-  const [isSearchEnabled, setIsSearchEnabled] = useState(false);
   const [statusIdx, setStatusIdx] = useState(0);
   const [selectedModel, setSelectedModel] = useState<string>('gemini-2.5-pro'); // Default to Stable Pro
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -76,6 +81,70 @@ const App: React.FC = () => {
   const [showHistory, setShowHistory] = useState(false);
   const [showManual, setShowManual] = useState(false);
   const [urlInput, setUrlInput] = useState('');
+
+  // Project Management State
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [showProjectList, setShowProjectList] = useState(false);
+
+  // Initialize Project System
+  useEffect(() => {
+    const initProject = async () => {
+      if (user && !activeProjectId) {
+        try {
+          const projects = await projectService.getUserProjects(user.uid);
+          if (projects.length > 0) {
+            // Load most recent
+            loadProject(projects[0]);
+          } else {
+            // Create default
+            const newProject = await projectService.createProject(user.uid, user.displayName || user.email || 'Anonymous');
+            loadProject(newProject);
+          }
+        } catch (e) {
+          console.error("Project init error", e);
+        }
+      }
+    };
+    initProject();
+  }, [user]);
+
+  const loadProject = (project: Project) => {
+    setActiveProjectId(project.id);
+
+    // Construct AppState from Project (excluding ID/meta timestamps for the state object itself if needed, 
+    // but Project extends AppState so it is compatible)
+    setState({
+      currentStage: project.currentStage,
+      projectMetadata: project.projectMetadata,
+      stages: project.stages,
+      settings: project.settings || { isThinkingEnabled: false, isSearchEnabled: false }
+    });
+
+    // If specific stage was active, maybe restore it? For now default behavior is defined by state.currentStage
+    setShowProjectList(false);
+  };
+
+  // Auto-Save Project State
+  useEffect(() => {
+    if (!user || !activeProjectId) return;
+
+    const saveTimer = setTimeout(() => {
+      const projectToSave: Project = {
+        ...state,
+        id: activeProjectId,
+        userId: user.uid,
+        name: state.projectMetadata.companyName || 'Untitled Project',
+        // createdAt/updatedAt handled by service or kept from previous if we merged properly. 
+        // Service handles updatedAt. CreatedAt we ideally should persist. 
+        // For simplicity, service merge will keep existing fields.
+        createdAt: 0, // Dummies, service handles merge
+        updatedAt: 0
+      };
+      projectService.saveProject(projectToSave).catch(e => console.error("Auto-save failed", e));
+    }, 2000); // 2 second debounce
+
+    return () => clearTimeout(saveTimer);
+  }, [state, activeProjectId, user]);
 
   // Jira State
   const [showJiraSync, setShowJiraSync] = useState(false);
@@ -161,8 +230,8 @@ const App: React.FC = () => {
     score += Math.min(15, (inputLen / 500) * 15);
 
     // Intelligence Multipliers (Max +15)
-    if (isThinkingEnabled) score += 7.5;
-    if (isSearchEnabled) score += 7.5;
+    if (state.settings.isThinkingEnabled) score += 7.5;
+    if (state.settings.isSearchEnabled) score += 7.5;
 
     // Consistency check
     const previousStages = (Object.values(DiscoveryStage) as DiscoveryStage[])
@@ -649,8 +718,8 @@ When using Google Search:
           STAGE_CONFIGS[targetStage].systemInstruction,
           finalUserPrompt,
           allFiles,
-          isThinkingEnabled,
-          isSearchEnabled
+          state.settings.isThinkingEnabled,
+          state.settings.isSearchEnabled
         );
 
         // Normalize response
@@ -667,8 +736,8 @@ When using Google Search:
           STAGE_CONFIGS[targetStage].systemInstruction,
           finalUserPrompt,
           allFiles,
-          isThinkingEnabled,
-          isSearchEnabled,
+          state.settings.isThinkingEnabled,
+          state.settings.isSearchEnabled,
           selectedModel // Pass the specific override
         );
       }
@@ -1050,7 +1119,9 @@ When using Google Search:
 
       <div className="pt-6 border-t border-slate-800/50 mt-6 shrink-0">
         {/* Auth Profile Section */}
-        <div className="p-3 rounded-2xl bg-slate-800/40 border border-slate-700/50 flex items-center gap-3 mb-3 relative group">
+        <div className="p-3 rounded-2xl bg-slate-800/40 border border-slate-700/50 flex items-center gap-3 mb-3 relative group cursor-pointer hover:bg-slate-800/60 transition-colors"
+          onClick={() => setShowProjectList(true)}
+        >
           {user?.photoURL ? (
             <img src={user.photoURL} alt="User" className="w-8 h-8 rounded-full border border-slate-600" />
           ) : (
@@ -1058,14 +1129,20 @@ When using Google Search:
               {user?.displayName ? user.displayName.charAt(0).toUpperCase() : 'U'}
             </div>
           )}
-          <div className="flex-1 min-w-0 transition-opacity duration-300 group-hover:opacity-40">
-            <div className="text-[11px] font-bold text-slate-200 truncate">{user?.displayName || 'Authorized User'}</div>
-            <div className="text-[9px] text-slate-500 truncate">{user?.email}</div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[11px] font-bold text-slate-200 truncate">{state.projectMetadata.companyName || 'Untitled Project'}</div>
+            <div className="text-[9px] text-slate-500 truncate flex items-center gap-1">
+              <i className="fas fa-folder text-[8px]"></i>
+              <span>Switch Project</span>
+              <i className="fas fa-chevron-right text-[8px] ml-1 opacity-50"></i>
+            </div>
           </div>
-
           <button
-            onClick={logout}
-            className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg bg-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 font-bold border border-rose-500/30"
+            onClick={(e) => {
+              e.stopPropagation();
+              logout();
+            }}
+            className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg bg-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 font-bold border border-rose-500/30 z-10"
             title="Sign Out"
           >
             <i className="fas fa-sign-out-alt text-xs"></i>
@@ -1120,13 +1197,13 @@ When using Google Search:
                   {currentStageData.status === 'completed' && <i className="fas fa-check-circle text-emerald-500 text-xs sm:text-sm shrink-0"></i>}
                 </h2>
                 <div className="flex items-center gap-2">
-                  {isThinkingEnabled && (
+                  {state.settings.isThinkingEnabled && (
                     <span className="px-2 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-[8px] sm:text-[9px] font-black text-indigo-400 tracking-widest uppercase flex items-center gap-1.5 shrink-0">
                       <i className="fas fa-brain text-[8px]"></i>
                       <span className="hidden xs:inline">Thinking</span>
                     </span>
                   )}
-                  {isSearchEnabled && (
+                  {state.settings.isSearchEnabled && (
                     <span className="px-2 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-[8px] sm:text-[9px] font-black text-amber-400 tracking-widest uppercase flex items-center gap-1.5 shrink-0">
                       <i className="fas fa-search text-[8px]"></i>
                       <span className="hidden xs:inline">Research</span>
@@ -1138,6 +1215,19 @@ When using Google Search:
             </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+            {/* Thinking Mode Toggle (Only for Specific Models) */}
+            {['gpt-oss-120b', 'gemini-2.5-pro'].includes(selectedModel) && (
+              <button
+                onClick={() => setState(prev => ({
+                  ...prev,
+                  settings: { ...prev.settings, isThinkingEnabled: !prev.settings.isThinkingEnabled }
+                }))}
+                className={`flex-1 p-5 rounded-2xl border transition-all duration-500 group flex flex-col items-center justify-center relative overflow-hidden ${state.settings.isThinkingEnabled ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.2)]' : 'bg-slate-900 border-slate-700 text-slate-500 hover:text-slate-400 hover:border-slate-600'
+                  }`}
+                title="Enhance reasoning with Gemini 2.0 Thinking Mode"          >
+                <i className={`fas fa-brain text-xs sm:text-sm z-10 ${state.settings.isThinkingEnabled ? 'animate-pulse' : ''}`}></i>
+              </button>
+            )}
             <button
               onClick={toggleVoice}
               className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-all duration-500 border relative overflow-hidden group
@@ -1486,7 +1576,7 @@ When using Google Search:
                   <div className="mt-8 space-y-3">
                     <div className="flex items-center justify-between p-3 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 transition-all hover:bg-indigo-500/10">
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${isThinkingEnabled ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-500'}`}>
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${state.settings.isThinkingEnabled ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-500'}`}>
                           <i className="fas fa-brain text-xs"></i>
                         </div>
                         <div>
@@ -1498,8 +1588,8 @@ When using Google Search:
                         <input
                           type="checkbox"
                           className="sr-only peer"
-                          checked={isThinkingEnabled}
-                          onChange={(e) => setIsThinkingEnabled(e.target.checked)}
+                          checked={state.settings.isThinkingEnabled}
+                          onChange={(e) => setState(prev => ({ ...prev, settings: { ...prev.settings, isThinkingEnabled: e.target.checked } }))}
                         />
                         <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                       </label>
@@ -1507,7 +1597,7 @@ When using Google Search:
 
                     <div className="flex items-center justify-between p-3 rounded-2xl bg-amber-500/5 border border-amber-500/10 transition-all hover:bg-amber-500/10">
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${isSearchEnabled ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-500'}`}>
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${state.settings.isSearchEnabled ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-500'}`}>
                           <i className="fas fa-search text-xs"></i>
                         </div>
                         <div>
@@ -1519,8 +1609,8 @@ When using Google Search:
                         <input
                           type="checkbox"
                           className="sr-only peer"
-                          checked={isSearchEnabled}
-                          onChange={(e) => setIsSearchEnabled(e.target.checked)}
+                          checked={state.settings.isSearchEnabled}
+                          onChange={(e) => setState(prev => ({ ...prev, settings: { ...prev.settings, isSearchEnabled: e.target.checked } }))}
                         />
                         <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
                       </label>
@@ -2011,9 +2101,9 @@ When using Google Search:
             </div>
           </div>
         </div >
-      </main >
+      </main>
 
-      {analyzingStage && (
+      {(analyzingStage) && (
         <div className="fixed inset-0 z-[200] bg-[#020617]/95 backdrop-blur-3xl flex items-center justify-center p-6 animate-in fade-in duration-500">
           <div className="max-w-md w-full flex flex-col items-center text-center">
             <div className="relative mb-12">
@@ -2025,8 +2115,8 @@ When using Google Search:
                 <div className="w-24 h-24 sm:w-32 sm:h-32 border-t-2 border-indigo-500 rounded-full animate-[spin_2s_linear_infinite]"></div>
               </div>
               <div className="absolute inset-0 flex items-center justify-center">
-                <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center animate-pulse transition-all duration-1000 ${isThinkingEnabled ? 'bg-indigo-600/20 shadow-[0_0_60px_rgba(99,102,241,0.4)]' : 'bg-indigo-500/10'}`}>
-                  <i className={`fas ${isThinkingEnabled ? 'fa-microchip' : 'fa-brain'} text-3xl sm:text-4xl text-indigo-500`}></i>
+                <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center animate-pulse transition-all duration-1000 ${state.settings.isThinkingEnabled ? 'bg-indigo-600/20 shadow-[0_0_60px_rgba(99,102,241,0.4)]' : 'bg-indigo-500/10'}`}>
+                  <i className={`fas ${state.settings.isThinkingEnabled ? 'fa-microchip' : 'fa-brain'} text-3xl sm:text-4xl text-indigo-500`}></i>
                 </div>
               </div>
             </div>
@@ -2161,6 +2251,7 @@ When using Google Search:
               </div>
 
               <div className="p-8 sm:p-12 border-t border-slate-800 bg-slate-950/40 flex flex-col sm:flex-row justify-between items-center gap-8">
+
                 <button
                   onClick={() => setShowProjectConfig(false)}
                   className="text-[11px] font-bold text-slate-500 uppercase tracking-widest hover:text-indigo-400 transition-colors flex items-center gap-2"
@@ -2349,7 +2440,23 @@ When using Google Search:
           </div>
         )
       }
-    </div >
+      <button onClick={() => setShowManual(true)} className="fixed bottom-6 right-6 w-12 h-12 rounded-full bg-slate-800 text-white shadow-lg flex items-center justify-center hover:bg-indigo-600 transition-colors z-40">
+        <i className="fas fa-question text-xl"></i>
+      </button>
+
+      {/* Manual Modal */}
+      {showManual && <ProductManual onClose={() => setShowManual(false)} />}
+
+      {/* Project List Modal */}
+      {showProjectList && (
+        <ProjectListModal
+          isOpen={showProjectList}
+          onClose={() => setShowProjectList(false)}
+          onSelectProject={loadProject}
+          activeProjectId={activeProjectId}
+        />
+      )}
+    </div>
   );
 };
 
