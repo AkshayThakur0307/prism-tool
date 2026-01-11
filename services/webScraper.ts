@@ -17,7 +17,7 @@ export async function scrapeUrl(url: string): Promise<string> {
             throw new Error(`Failed to fetch URL via proxy: ${response.status} ${response.statusText}`);
         }
 
-        const data = await response.json();
+        const data = await response.json() as { contents: string };
         const html = data.contents;
 
         if (!html || html.length < 100) {
