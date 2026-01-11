@@ -19,6 +19,7 @@ import ProductManual from './components/ProductManual';
 import ProjectListModal from './components/ProjectListModal';
 import { marked } from 'marked';
 import { useAuth } from './src/contexts/AuthContext';
+import { useRBAC } from './src/hooks/useRBAC';
 
 const INITIAL_METADATA: ProjectMetadata = {
   companyName: '',
@@ -71,6 +72,7 @@ const ModelSelector: React.FC<{ value: string; onChange: (val: string) => void; 
 
 const App: React.FC = () => {
   const { logout, user } = useAuth();
+  const { role, canUseAdvancedAI, canExportData, canUseRefinementStudio, canEditProject } = useRBAC();
   const [state, setState] = useState<AppState>(INITIAL_STATE);
   const [analyzingStage, setAnalyzingStage] = useState<DiscoveryStage | null>(null);
   const [statusIdx, setStatusIdx] = useState(0);
@@ -1207,6 +1209,14 @@ When using Google Search:
                 <h2 className="text-sm sm:text-lg font-bold text-white flex items-center gap-2 min-w-0 max-w-full">
                   <span className="truncate">{config.title}</span>
                   {currentStageData.status === 'completed' && <i className="fas fa-check-circle text-emerald-500 text-xs sm:text-sm shrink-0"></i>}
+                  <span className={`hidden md:flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[9px] font-black uppercase tracking-widest ml-2
+                    ${role === 'pro' ? 'bg-amber-500/10 border-amber-500/50 text-amber-500' :
+                      role === 'standard' ? 'bg-blue-500/10 border-blue-500/50 text-blue-500' :
+                        'bg-slate-700/50 border-slate-600 text-slate-400'}
+                  `}>
+                    {role === 'pro' && <i className="fas fa-crown text-[8px]"></i>}
+                    {role}
+                  </span>
                 </h2>
                 <div className="flex items-center gap-2">
                   {state.settings.isThinkingEnabled && (
@@ -1230,14 +1240,18 @@ When using Google Search:
             {/* Thinking Mode Toggle (Only for Specific Models) */}
             {['gpt-oss-120b', 'gemini-2.5-pro'].includes(selectedModel) && (
               <button
+                disabled={!canUseAdvancedAI}
                 onClick={() => setState(prev => ({
                   ...prev,
                   settings: { ...prev.settings, isThinkingEnabled: !prev.settings.isThinkingEnabled }
                 }))}
-                className={`flex-1 p-5 rounded-2xl border transition-all duration-500 group flex flex-col items-center justify-center relative overflow-hidden ${state.settings.isThinkingEnabled ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.2)]' : 'bg-slate-900 border-slate-700 text-slate-500 hover:text-slate-400 hover:border-slate-600'
-                  }`}
-                title="Enhance reasoning with Gemini 2.0 Thinking Mode"          >
+                className={`flex-1 p-5 rounded-2xl border transition-all duration-500 group flex flex-col items-center justify-center relative overflow-hidden h-10 w-10 
+                  ${state.settings.isThinkingEnabled ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.2)]' : 'bg-slate-900 border-slate-700 text-slate-500 hover:text-slate-400 hover:border-slate-600'}
+                  ${!canUseAdvancedAI ? 'opacity-50 cursor-not-allowed' : ''}
+                  `}
+                title={!canUseAdvancedAI ? "Upgrade to Pro to enable Thinking Mode" : "Enhance reasoning with Gemini 2.0 Thinking Mode"}          >
                 <i className={`fas fa-brain text-xs sm:text-sm z-10 ${state.settings.isThinkingEnabled ? 'animate-pulse' : ''}`}></i>
+                {!canUseAdvancedAI && <div className="absolute inset-0 flex items-center justify-center bg-black/40"><i className="fas fa-lock text-[8px] text-amber-500"></i></div>}
               </button>
             )}
             <button
@@ -1253,24 +1267,41 @@ When using Google Search:
 
             {/* STAGE SPECIFIC ACTIONS */}
             {state.currentStage === DiscoveryStage.EPICS && currentStageData.status === 'completed' && (
-              <button
-                onClick={async () => {
-                  const { generateEpicsExcel } = await import('./services/excelService');
-                  generateEpicsExcel(currentStageData.output, `Epics_Estimation_${state.projectMetadata.companyName || 'Project'}.xlsx`);
-                }}
-                className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 text-xs font-medium transition-colors"
-                title="Export for Estimation"
-              >
-                <i className="fas fa-file-excel"></i>
-                <span>Excel Export</span>
-              </button>
+              canExportData ? (
+                <button
+                  onClick={async () => {
+                    const { generateEpicsExcel } = await import('./services/excelService');
+                    generateEpicsExcel(currentStageData.output, `Epics_Estimation_${state.projectMetadata.companyName || 'Project'}.xlsx`);
+                  }}
+                  className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 text-xs font-medium transition-colors"
+                  title="Export for Estimation"
+                >
+                  <i className="fas fa-file-excel"></i>
+                  <span>Excel Export</span>
+                </button>
+              ) : (
+                <button
+                  disabled
+                  className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/5 border border-emerald-500/10 text-emerald-400/50 cursor-not-allowed"
+                  title="Upgrade to Pro to export"
+                >
+                  <i className="fas fa-lock text-[10px] text-amber-500 mr-1"></i>
+                  <span>Excel Export</span>
+                </button>
+              )
             )}
 
             <button
               onClick={() => exportData('pdf')}
-              className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-medium transition-colors"
-              title="Export PDF"
+              disabled={!canExportData}
+              className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors text-xs font-medium
+                ${canExportData
+                  ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white'
+                  : 'bg-slate-800/50 text-slate-500 cursor-not-allowed'}
+              `}
+              title={canExportData ? "Export PDF" : "Upgrade to Pro to export PDF"}
             >
+              {!canExportData && <i className="fas fa-lock text-[9px] text-amber-500"></i>}
               <i className="fas fa-file-pdf"></i>
               <span className="hidden sm:inline ml-2">PDF</span>
             </button>
@@ -1442,12 +1473,14 @@ When using Google Search:
                         isListening={voice.isActive && !liveSessionRef.current}
                         size="sm"
                       />
-                      <RefineInputButton
-                        text={currentStageData.input}
-                        onRefine={(newText) => handleInputChange({ target: { value: newText } } as any)}
-                        contextType={`Project Context for ${state.currentStage}`}
-                        size="sm"
-                      />
+                      {canUseRefinementStudio && (
+                        <RefineInputButton
+                          text={currentStageData.input}
+                          onRefine={(newText) => handleInputChange({ target: { value: newText } } as any)}
+                          contextType={`Project Context for ${state.currentStage}`}
+                          size="sm"
+                        />
+                      )}
                       {state.currentStage !== DiscoveryStage.DOMAIN && (
                         <button
                           onClick={importPrevious}
@@ -1467,14 +1500,24 @@ When using Google Search:
                     </div>
                   </div>
 
-                  <textarea
-                    value={currentStageData.input}
-                    onChange={handleInputChange}
-                    placeholder={config.placeholder}
-                    className={`w-full h-48 sm:h-72 bg-slate-950/40 border rounded-2xl p-4 sm:p-5 text-sm text-slate-300 focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all resize-none shadow-inner font-light leading-relaxed
-                    ${voice.isActive ? 'border-indigo-500/30' : 'border-slate-800'}
-                  `}
-                  />
+                  <div className="relative">
+                    <textarea
+                      value={currentStageData.input}
+                      onChange={handleInputChange}
+                      readOnly={!canEditProject}
+                      placeholder={config.placeholder}
+                      className={`w-full h-48 sm:h-72 bg-slate-950/40 border rounded-2xl p-4 sm:p-5 text-sm text-slate-300 focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all resize-none shadow-inner font-light leading-relaxed
+                      ${voice.isActive ? 'border-indigo-500/30' : 'border-slate-800'}
+                      ${!canEditProject ? 'opacity-60 cursor-not-allowed' : ''}
+                    `}
+                    />
+                    {!canEditProject && (
+                      <div className="absolute top-4 right-4 bg-slate-900/90 border border-slate-700 rounded-lg px-2 py-1 flex items-center gap-2 shadow-lg backdrop-blur-sm pointer-events-none">
+                        <i className="fas fa-lock text-xs text-slate-500"></i>
+                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Read Only</span>
+                      </div>
+                    )}
+                  </div>
 
                   {/* URL Management Interface */}
                   <div className="mt-6 space-y-4">
@@ -1596,15 +1639,17 @@ When using Google Search:
                           <p className="text-[8px] text-slate-500 mt-1 uppercase font-bold tracking-widest">Enhanced Synthesis</p>
                         </div>
                       </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
+                      <div className="relative inline-flex items-center cursor-pointer group/lock">
                         <input
                           type="checkbox"
                           className="sr-only peer"
+                          disabled={!canUseAdvancedAI}
                           checked={state.settings.isThinkingEnabled}
                           onChange={(e) => setState(prev => ({ ...prev, settings: { ...prev.settings, isThinkingEnabled: e.target.checked } }))}
                         />
-                        <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                      </label>
+                        <div className={`w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600 ${!canUseAdvancedAI ? 'opacity-50' : ''}`}></div>
+                        {!canUseAdvancedAI && <i className="fas fa-lock text-amber-500 text-xs absolute -left-5"></i>}
+                      </div>
                     </div>
 
                     <div className="flex items-center justify-between p-3 rounded-2xl bg-amber-500/5 border border-amber-500/10 transition-all hover:bg-amber-500/10">
@@ -1617,15 +1662,17 @@ When using Google Search:
                           <p className="text-[8px] text-slate-500 mt-1 uppercase font-bold tracking-widest">External Validation</p>
                         </div>
                       </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
+                      <div className="relative inline-flex items-center cursor-pointer group/lock">
                         <input
                           type="checkbox"
                           className="sr-only peer"
+                          disabled={!canUseAdvancedAI}
                           checked={state.settings.isSearchEnabled}
                           onChange={(e) => setState(prev => ({ ...prev, settings: { ...prev.settings, isSearchEnabled: e.target.checked } }))}
                         />
-                        <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
-                      </label>
+                        <div className={`w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600 ${!canUseAdvancedAI ? 'opacity-50' : ''}`}></div>
+                        {!canUseAdvancedAI && <i className="fas fa-lock text-amber-500 text-xs absolute -left-5"></i>}
+                      </div>
                     </div>
                   </div>
 
@@ -2181,9 +2228,10 @@ When using Google Search:
                     <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">Company Name</label>
                     <input
                       type="text"
+                      readOnly={!canEditProject}
                       value={state.projectMetadata.companyName}
                       onChange={(e) => handleMetadataChange('companyName', e.target.value)}
-                      className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all"
+                      className={`w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEditProject ? 'opacity-50 cursor-not-allowed' : ''}`}
                       placeholder="e.g. Material+"
                     />
                   </div>
@@ -2191,9 +2239,10 @@ When using Google Search:
                     <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">Target Vertical</label>
                     <input
                       type="text"
+                      readOnly={!canEditProject}
                       value={state.projectMetadata.targetVertical}
                       onChange={(e) => handleMetadataChange('targetVertical', e.target.value)}
-                      className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all"
+                      className={`w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEditProject ? 'opacity-50 cursor-not-allowed' : ''}`}
                       placeholder="e.g. Fintech, Media, Sports"
                     />
                   </div>
@@ -2201,9 +2250,10 @@ When using Google Search:
                     <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">Geography</label>
                     <input
                       type="text"
+                      readOnly={!canEditProject}
                       value={state.projectMetadata.geography}
                       onChange={(e) => handleMetadataChange('geography', e.target.value)}
-                      className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all"
+                      className={`w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEditProject ? 'opacity-50 cursor-not-allowed' : ''}`}
                       placeholder="e.g. NA, EMEA, Global..."
                     />
                   </div>
@@ -2211,9 +2261,10 @@ When using Google Search:
                     <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">TAM / Market Focus</label>
                     <input
                       type="text"
+                      readOnly={!canEditProject}
                       value={state.projectMetadata.tam}
                       onChange={(e) => handleMetadataChange('tam', e.target.value)}
-                      className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all"
+                      className={`w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEditProject ? 'opacity-50 cursor-not-allowed' : ''}`}
                       placeholder="Market size or growth goal..."
                     />
                   </div>
@@ -2221,9 +2272,10 @@ When using Google Search:
                     <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">Revenue Model</label>
                     <input
                       type="text"
+                      readOnly={!canEditProject}
                       value={state.projectMetadata.revenueModel}
                       onChange={(e) => handleMetadataChange('revenueModel', e.target.value)}
-                      className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all"
+                      className={`w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEditProject ? 'opacity-50 cursor-not-allowed' : ''}`}
                       placeholder="e.g. Subscription, Ad-led..."
                     />
                   </div>
@@ -2231,9 +2283,10 @@ When using Google Search:
                     <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">Web Presence / References</label>
                     <input
                       type="text"
+                      readOnly={!canEditProject}
                       value={state.projectMetadata.websiteUrls}
                       onChange={(e) => handleMetadataChange('websiteUrls', e.target.value)}
-                      className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all"
+                      className={`w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEditProject ? 'opacity-50 cursor-not-allowed' : ''}`}
                       placeholder="URLs for business context..."
                     />
                   </div>
@@ -2243,9 +2296,10 @@ When using Google Search:
                   <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">Competitive Benchmark</label>
                   <textarea
                     rows={2}
+                    readOnly={!canEditProject}
                     value={state.projectMetadata.keyCompetitors}
                     onChange={(e) => handleMetadataChange('keyCompetitors', e.target.value)}
-                    className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all resize-none"
+                    className={`w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all resize-none ${!canEditProject ? 'opacity-50 cursor-not-allowed' : ''}`}
                     placeholder="Who are we competing with?"
                   />
                 </div>
@@ -2254,9 +2308,10 @@ When using Google Search:
                   <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">Core Mission</label>
                   <textarea
                     rows={3}
+                    readOnly={!canEditProject}
                     value={state.projectMetadata.missionStatement}
                     onChange={(e) => handleMetadataChange('missionStatement', e.target.value)}
-                    className="w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all resize-none"
+                    className={`w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all resize-none ${!canEditProject ? 'opacity-50 cursor-not-allowed' : ''}`}
                     placeholder="Ultimate vision for this project..."
                   />
                 </div>

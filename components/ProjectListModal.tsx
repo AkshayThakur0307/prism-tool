@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Project } from '../types';
 import { projectService } from '../services/projectService';
 import { useAuth } from '../src/contexts/AuthContext';
+import { useRBAC } from '../src/hooks/useRBAC';
 
 interface ProjectListModalProps {
     isOpen: boolean;
@@ -14,6 +15,7 @@ interface ProjectListModalProps {
 
 const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, onSelectProject, onProjectUpdated, activeProjectId }) => {
     const { user } = useAuth();
+    const { role, canCreateProject, canDeleteProject } = useRBAC();
     const [projects, setProjects] = useState<Project[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
@@ -114,6 +116,13 @@ const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, on
                         <h2 className="text-xl font-bold text-white flex items-center gap-2">
                             <i className="fas fa-folder-open text-indigo-400"></i>
                             My Projects
+                            <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-full border tracking-widest ml-2
+                                ${role === 'pro' ? 'bg-amber-500/10 border-amber-500/50 text-amber-400' :
+                                    role === 'standard' ? 'bg-blue-500/10 border-blue-500/50 text-blue-400' :
+                                        'bg-slate-700/50 border-slate-600 text-slate-400'}
+                            `}>
+                                {role} Plan
+                            </span>
                         </h2>
                         <p className="text-sm text-slate-400 mt-1">Manage your discovery workspaces</p>
                     </div>
@@ -126,26 +135,28 @@ const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, on
                 <div className="flex-1 overflow-y-auto p-6 space-y-4">
 
                     {/* Create New Block */}
-                    <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-4 flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-lg bg-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
-                            <i className="fas fa-plus"></i>
+                    {canCreateProject && (
+                        <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-4 flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-lg bg-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
+                                <i className="fas fa-plus"></i>
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="Enter project name (e.g. Acme Corp Discovery)..."
+                                className="flex-1 bg-transparent border-none outline-none text-white placeholder-slate-500"
+                                value={newProjectName}
+                                onChange={(e) => setNewProjectName(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                            />
+                            <button
+                                onClick={handleCreate}
+                                disabled={isCreating}
+                                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                            >
+                                {isCreating ? 'Creating...' : 'Create New'}
+                            </button>
                         </div>
-                        <input
-                            type="text"
-                            placeholder="Enter project name (e.g. Acme Corp Discovery)..."
-                            className="flex-1 bg-transparent border-none outline-none text-white placeholder-slate-500"
-                            value={newProjectName}
-                            onChange={(e) => setNewProjectName(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-                        />
-                        <button
-                            onClick={handleCreate}
-                            disabled={isCreating}
-                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
-                        >
-                            {isCreating ? 'Creating...' : 'Create New'}
-                        </button>
-                    </div>
+                    )}
 
                     {/* List */}
                     {isLoading ? (
@@ -209,13 +220,15 @@ const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, on
                                         >
                                             <i className="fas fa-pen"></i>
                                         </button>
-                                        <button
-                                            onClick={(e) => handleDelete(project.id, e)}
-                                            className="p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
-                                            title="Delete Project"
-                                        >
-                                            <i className="fas fa-trash-alt"></i>
-                                        </button>
+                                        {canDeleteProject && (
+                                            <button
+                                                onClick={(e) => handleDelete(project.id, e)}
+                                                className="p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+                                                title="Delete Project"
+                                            >
+                                                <i className="fas fa-trash-alt"></i>
+                                            </button>
+                                        )}
                                         <div className="text-indigo-400">
                                             <i className="fas fa-chevron-right"></i>
                                         </div>

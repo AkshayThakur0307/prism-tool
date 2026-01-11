@@ -81,3 +81,13 @@ export interface VoiceState {
   isSpeaking: boolean;
   transcript: string;
 }
+
+export type UserRole = 'viewer' | 'standard' | 'pro';
+
+export interface UserProfile {
+  uid: string;
+  email: string;
+  displayName?: string;
+  role: UserRole;
+  createdAt: number;
+}
