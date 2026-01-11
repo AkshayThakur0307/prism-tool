@@ -20,6 +20,7 @@ import ProjectListModal from './components/ProjectListModal';
 import { marked } from 'marked';
 import { useAuth } from './src/contexts/AuthContext';
 import { useRBAC } from './src/hooks/useRBAC';
+import AdminUserModal from './components/AdminUserModal';
 
 const INITIAL_METADATA: ProjectMetadata = {
   companyName: '',
@@ -72,7 +73,8 @@ const ModelSelector: React.FC<{ value: string; onChange: (val: string) => void; 
 
 const App: React.FC = () => {
   const { logout, user } = useAuth();
-  const { role, canUseAdvancedAI, canExportData, canUseRefinementStudio, canEditProject } = useRBAC();
+  const { role, canUseAdvancedAI, canExportData, canUseRefinementStudio, canEditProject, isAdmin } = useRBAC();
+  const [showAdminModal, setShowAdminModal] = useState(false);
   const [state, setState] = useState<AppState>(INITIAL_STATE);
   const [analyzingStage, setAnalyzingStage] = useState<DiscoveryStage | null>(null);
   const [statusIdx, setStatusIdx] = useState(0);
@@ -1151,12 +1153,22 @@ When using Google Search:
               <i className="fas fa-chevron-right text-[8px] ml-1 opacity-50"></i>
             </div>
           </div>
+
+          {isAdmin && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowAdminModal(true); }}
+              className="w-8 h-8 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 flex items-center justify-center text-rose-500 transition-colors ml-1 shrink-0"
+              title="Admin Console"
+            >
+              <i className="fas fa-users-cog text-xs"></i>
+            </button>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation();
               logout();
             }}
-            className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg bg-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 font-bold border border-rose-500/30 z-10"
+            className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-white flex items-center justify-center transition-all duration-200 border border-slate-700 hover:border-rose-500/30 shrink-0 ml-1"
             title="Sign Out"
           >
             <i className="fas fa-sign-out-alt text-xs"></i>
@@ -2522,6 +2534,13 @@ When using Google Search:
           onSelectProject={loadProject}
           onProjectUpdated={handleProjectUpdated}
           activeProjectId={activeProjectId}
+        />
+      )}
+
+      {showAdminModal && (
+        <AdminUserModal
+          isOpen={showAdminModal}
+          onClose={() => setShowAdminModal(false)}
         />
       )}
     </div>

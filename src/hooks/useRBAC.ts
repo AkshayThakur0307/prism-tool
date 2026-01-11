@@ -11,19 +11,23 @@ export const useRBAC = () => {
         isLoading: loading,
 
         // Feature Permissions
-        canCreateProject: role === 'standard' || role === 'pro',
-        canEditProject: role === 'standard' || role === 'pro',
-        canDeleteProject: role === 'standard' || role === 'pro',
+        canCreateProject: role === 'standard' || role === 'pro' || role === 'admin',
+        canEditProject: role === 'standard' || role === 'pro' || role === 'admin',
+        canDeleteProject: role === 'standard' || role === 'pro' || role === 'admin',
 
         // AI Features
-        canUseBasicAI: role === 'standard' || role === 'pro',
-        canUseAdvancedAI: role === 'pro', // Thinking Mode, Research Grounding
+        canUseBasicAI: role === 'standard' || role === 'pro' || role === 'admin',
+        canUseAdvancedAI: role === 'pro' || role === 'admin', // Thinking Mode, Research Grounding
 
         // Export / Integrations
-        canExportData: role === 'pro',
-        canSyncJira: role === 'pro',
+        canExportData: role === 'pro' || role === 'admin',
+        canSyncJira: role === 'pro' || role === 'admin',
 
         // Refinement
-        canUseRefinementStudio: role === 'pro',
+        canUseRefinementStudio: role === 'pro' || role === 'admin',
+
+        // Admin
+        isAdmin: role === 'admin',
+        canManageUsers: role === 'admin',
     };
 };

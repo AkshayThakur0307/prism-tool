@@ -82,7 +82,7 @@ export interface VoiceState {
   transcript: string;
 }
 
-export type UserRole = 'viewer' | 'standard' | 'pro';
+export type UserRole = 'viewer' | 'standard' | 'pro' | 'admin';
 
 export interface UserProfile {
   uid: string;
