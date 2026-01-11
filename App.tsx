@@ -21,6 +21,7 @@ import { marked } from 'marked';
 import { useAuth } from './src/contexts/AuthContext';
 import { useRBAC } from './src/hooks/useRBAC';
 import AdminUserModal from './components/AdminUserModal';
+import { ShareProjectModal } from './components/ShareProjectModal';
 
 const INITIAL_METADATA: ProjectMetadata = {
   companyName: '',
@@ -73,8 +74,9 @@ const ModelSelector: React.FC<{ value: string; onChange: (val: string) => void; 
 
 const App: React.FC = () => {
   const { logout, user } = useAuth();
-  const { role, canUseAdvancedAI, canExportData, canUseRefinementStudio, canEditProject, isAdmin } = useRBAC();
+  const { role, canUseAdvancedAI, canExportData, canUseRefinementStudio, canEditProject, isAdmin, canShareProject } = useRBAC();
   const [showAdminModal, setShowAdminModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const [state, setState] = useState<AppState>(INITIAL_STATE);
   const [analyzingStage, setAnalyzingStage] = useState<DiscoveryStage | null>(null);
   const [statusIdx, setStatusIdx] = useState(0);
@@ -1332,6 +1334,22 @@ When using Google Search:
               <span className="hidden sm:inline ml-2">PDF</span>
             </button>
 
+            <button
+
+              onClick={() => setShowShareModal(true)}
+              disabled={!canEditProject} // Basic check, modal handles permission details or we use canShareProject logic
+              className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors text-xs font-medium
+                ${canShareProject
+                  ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
+                  : 'bg-slate-800/50 text-slate-500 cursor-not-allowed'}
+              `}
+              title={canShareProject ? "Share Project" : "Upgrade to Pro to share"}
+            >
+              {!canShareProject && <i className="fas fa-lock text-[9px] text-amber-500"></i>}
+              <i className="fas fa-user-plus"></i>
+              <span className="hidden sm:inline ml-2">Share</span>
+            </button>
+
             {currentStageData.output && (
               <div className="flex items-center gap-2 sm:gap-3">
                 <button
@@ -2233,40 +2251,42 @@ When using Google Search:
         </div >
       </main>
 
-      {(analyzingStage) && (
-        <div className="fixed inset-0 z-[200] bg-[#020617]/95 backdrop-blur-3xl flex items-center justify-center p-6 animate-in fade-in duration-500">
-          <div className="max-w-md w-full flex flex-col items-center text-center">
-            <div className="relative mb-12">
-              <div className="w-40 h-40 sm:w-56 sm:h-56 border-2 border-indigo-500/10 rounded-full animate-[spin_8s_linear_infinite]"></div>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-32 h-32 sm:w-44 sm:h-44 border-b-2 border-indigo-500/30 rounded-full animate-[spin_4s_linear_infinite]"></div>
-              </div>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-24 h-24 sm:w-32 sm:h-32 border-t-2 border-indigo-500 rounded-full animate-[spin_2s_linear_infinite]"></div>
-              </div>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center animate-pulse transition-all duration-1000 ${state.settings.isThinkingEnabled ? 'bg-indigo-600/20 shadow-[0_0_60px_rgba(99,102,241,0.4)]' : 'bg-indigo-500/10'}`}>
-                  <i className={`fas ${state.settings.isThinkingEnabled ? 'fa-microchip' : 'fa-brain'} text-3xl sm:text-4xl text-indigo-500`}></i>
+      {
+        (analyzingStage) && (
+          <div className="fixed inset-0 z-[200] bg-[#020617]/95 backdrop-blur-3xl flex items-center justify-center p-6 animate-in fade-in duration-500">
+            <div className="max-w-md w-full flex flex-col items-center text-center">
+              <div className="relative mb-12">
+                <div className="w-40 h-40 sm:w-56 sm:h-56 border-2 border-indigo-500/10 rounded-full animate-[spin_8s_linear_infinite]"></div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-32 h-32 sm:w-44 sm:h-44 border-b-2 border-indigo-500/30 rounded-full animate-[spin_4s_linear_infinite]"></div>
+                </div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-24 h-24 sm:w-32 sm:h-32 border-t-2 border-indigo-500 rounded-full animate-[spin_2s_linear_infinite]"></div>
+                </div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center animate-pulse transition-all duration-1000 ${state.settings.isThinkingEnabled ? 'bg-indigo-600/20 shadow-[0_0_60px_rgba(99,102,241,0.4)]' : 'bg-indigo-500/10'}`}>
+                    <i className={`fas ${state.settings.isThinkingEnabled ? 'fa-microchip' : 'fa-brain'} text-3xl sm:text-4xl text-indigo-500`}></i>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <h4 className="text-2xl sm:text-3xl font-black text-white mb-4 tracking-tighter uppercase">
-              {STAGE_CONFIGS[analyzingStage]?.agentName || 'Agent Processing'}
-            </h4>
+              <h4 className="text-2xl sm:text-3xl font-black text-white mb-4 tracking-tighter uppercase">
+                {STAGE_CONFIGS[analyzingStage]?.agentName || 'Agent Processing'}
+              </h4>
 
-            <div className="h-10">
-              <p className="text-indigo-400 text-sm sm:text-base font-bold tracking-[0.2em] animate-pulse uppercase">
-                {STAGE_CONFIGS[analyzingStage]?.statusMessages[statusIdx] || 'Synthesizing context...'}
-              </p>
-            </div>
+              <div className="h-10">
+                <p className="text-indigo-400 text-sm sm:text-base font-bold tracking-[0.2em] animate-pulse uppercase">
+                  {STAGE_CONFIGS[analyzingStage]?.statusMessages[statusIdx] || 'Synthesizing context...'}
+                </p>
+              </div>
 
-            <div className="mt-12 w-48 h-1 bg-slate-900 rounded-full overflow-hidden">
-              <div className="h-full bg-indigo-500 animate-[progress_10s_linear_infinite]"></div>
+              <div className="mt-12 w-48 h-1 bg-slate-900 rounded-full overflow-hidden">
+                <div className="h-full bg-indigo-500 animate-[progress_10s_linear_infinite]"></div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {
         showProjectConfig && (
@@ -2586,23 +2606,36 @@ When using Google Search:
       {showManual && <ProductManual onClose={() => setShowManual(false)} />}
 
       {/* Project List Modal */}
-      {showProjectList && (
-        <ProjectListModal
-          isOpen={showProjectList}
-          onClose={() => setShowProjectList(false)}
-          onSelectProject={loadProject}
-          onProjectUpdated={handleProjectUpdated}
-          activeProjectId={activeProjectId}
+      {
+        showProjectList && (
+          <ProjectListModal
+            isOpen={showProjectList}
+            onClose={() => setShowProjectList(false)}
+            onSelectProject={loadProject}
+            onProjectUpdated={handleProjectUpdated}
+            activeProjectId={activeProjectId}
+          />
+        )
+      }
+
+      {
+        showAdminModal && (
+          <AdminUserModal
+            isOpen={showAdminModal}
+            onClose={() => setShowAdminModal(false)}
+          />
+        )
+      }
+
+      {showShareModal && activeProjectId && (
+        <ShareProjectModal
+          projectId={activeProjectId}
+          projectName={state.projectMetadata.companyName || 'Untitled Project'}
+          onClose={() => setShowShareModal(false)}
         />
       )}
 
-      {showAdminModal && (
-        <AdminUserModal
-          isOpen={showAdminModal}
-          onClose={() => setShowAdminModal(false)}
-        />
-      )}
-    </div>
+    </div >
   );
 };
 

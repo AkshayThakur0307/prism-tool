@@ -49,6 +49,7 @@ const AdminUserModal: React.FC<AdminUserModalProps> = ({ isOpen, onClose }) => {
 
             // Update local state
             setUsers(users.map(u => u.uid === userId ? { ...u, role: newRole } : u));
+            alert(`User role updated to ${newRole}`);
         } catch (error) {
             console.error("Error updating user role:", error);
             alert("Failed to update user role.");

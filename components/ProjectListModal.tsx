@@ -16,7 +16,7 @@ interface ProjectListModalProps {
 
 const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, onSelectProject, onProjectUpdated, activeProjectId }) => {
     const { user } = useAuth();
-    const { role, canCreateProject, canDeleteProject } = useRBAC();
+    const { role, canCreateProject, canDeleteProject, canShareProject } = useRBAC();
     const [projects, setProjects] = useState<Project[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
@@ -233,15 +233,21 @@ const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, on
                                         </div>
 
                                         <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            {(role === 'pro' || role === 'admin') && (
-                                                <button
-                                                    onClick={(e) => handleShareClick(project, e)}
-                                                    className="p-2 text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors"
-                                                    title="Share Project"
-                                                >
-                                                    <i className="fas fa-share-alt"></i>
-                                                </button>
-                                            )}
+                                            <button
+                                                onClick={(e) => {
+                                                    if (!canShareProject) return;
+                                                    handleShareClick(project, e);
+                                                }}
+                                                className={`p-2 rounded-lg transition-colors
+                                                    ${canShareProject
+                                                        ? 'text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10'
+                                                        : 'text-slate-600 bg-slate-800/30 cursor-not-allowed opacity-50'}
+                                                `}
+                                                title={canShareProject ? "Share Project" : "Upgrade to Pro to share"}
+                                            >
+                                                {!canShareProject && <i className="fas fa-lock text-[8px] text-amber-500 mr-1"></i>}
+                                                <i className="fas fa-share-alt"></i>
+                                            </button>
                                             <button
                                                 onClick={(e) => startEditing(project, e)}
                                                 className="p-2 text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-colors"

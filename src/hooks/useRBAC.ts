@@ -5,6 +5,7 @@ export const useRBAC = () => {
     const { userProfile, loading } = useAuth();
 
     const role = userProfile?.role || 'viewer'; // Default to safe 'viewer' if not loaded
+    console.log("[RBAC] Current Role:", role, "| User:", userProfile?.email);
 
     return {
         role,
@@ -29,5 +30,8 @@ export const useRBAC = () => {
         // Admin
         isAdmin: role === 'admin',
         canManageUsers: role === 'admin',
+
+        // Share Permission
+        canShareProject: role === 'pro' || role === 'admin',
     };
 };

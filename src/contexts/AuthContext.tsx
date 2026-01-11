@@ -55,7 +55,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                             createdAt: Date.now()
                         };
                         try {
-                            await setDoc(userRef, newProfile);
+                            // Use merge: true to avoid overwriting if it exists created by another process
+                            await setDoc(userRef, newProfile, { merge: true });
+                            console.log("Created/Merged new user profile");
                         } catch (e) {
                             console.error("Error creating profile:", e);
                         }
