@@ -16,7 +16,7 @@ interface ProjectListModalProps {
 
 const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, onSelectProject, onProjectUpdated, activeProjectId }) => {
     const { user } = useAuth();
-    const { role, canCreateProject, canDeleteProject, canShareProject } = useRBAC();
+    const { role, canCreateProject, canDeleteProject, canShareProject, canEditProject } = useRBAC();
     const [projects, setProjects] = useState<Project[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
@@ -248,13 +248,15 @@ const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, on
                                                 {!canShareProject && <i className="fas fa-lock text-[8px] text-amber-500 mr-1"></i>}
                                                 <i className="fas fa-share-alt"></i>
                                             </button>
-                                            <button
-                                                onClick={(e) => startEditing(project, e)}
-                                                className="p-2 text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-colors"
-                                                title="Rename Project"
-                                            >
-                                                <i className="fas fa-pen"></i>
-                                            </button>
+                                            {canEditProject && (
+                                                <button
+                                                    onClick={(e) => startEditing(project, e)}
+                                                    className="p-2 text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-colors"
+                                                    title="Rename Project"
+                                                >
+                                                    <i className="fas fa-pen"></i>
+                                                </button>
+                                            )}
                                             {canDeleteProject && (
                                                 <button
                                                     onClick={(e) => handleDelete(project.id, e)}

@@ -115,8 +115,7 @@ export const projectService = {
             // 1. Fetch Owned Projects
             const ownedQuery = query(
                 collection(db, PROJECTS_COLLECTION),
-                where("userId", "==", userId),
-                orderBy("updatedAt", "desc")
+                where("userId", "==", userId)
             );
             const ownedSnapshot = await getDocs(ownedQuery);
 
