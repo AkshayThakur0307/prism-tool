@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../../services/firebaseConfig';
 import { UserProfile, UserRole } from '../../types';
 
@@ -23,48 +23,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     useEffect(() => {
         console.log("[AuthContext] Initializing listener...");
-        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+        let profileUnsubscribe: (() => void) | null = null;
+
+        const authUnsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             console.log("[AuthContext] Auth State Changed:", currentUser ? `User ${currentUser.uid}` : "No User");
             setUser(currentUser);
 
+            // Cleanup previous profile listener if user changes
+            if (profileUnsubscribe) {
+                profileUnsubscribe();
+                profileUnsubscribe = null;
+            }
+
             if (currentUser) {
-                // Fetch User Profile
                 const userRef = doc(db, 'users', currentUser.uid);
-                try {
-                    const userSnap = await getDoc(userRef);
-                    if (userSnap.exists()) {
-                        console.log("Loaded User Profile:", userSnap.data());
-                        setUserProfile(userSnap.data() as UserProfile);
+
+                // Real-time listener: Switch from getDoc to onSnapshot
+                profileUnsubscribe = onSnapshot(userRef, async (docSnap) => {
+                    if (docSnap.exists()) {
+                        const data = docSnap.data() as UserProfile;
+                        console.log("Updated User Profile:", data);
+                        setUserProfile(data);
                     } else {
-                        // Create new profile for first-time login
+                        // Create profile if missing
                         console.log("Creating new user profile...");
                         const newProfile: UserProfile = {
                             uid: currentUser.uid,
                             email: currentUser.email || '',
                             displayName: currentUser.displayName || '',
-                            role: 'standard', // Default role for new users
+                            role: 'standard',
                             createdAt: Date.now()
                         };
-                        await setDoc(userRef, newProfile);
-                        setUserProfile(newProfile);
+                        try {
+                            await setDoc(userRef, newProfile);
+                        } catch (e) {
+                            console.error("Error creating profile:", e);
+                        }
                     }
-                } catch (e) {
-                    console.error("Error fetching user profile:", e);
-                    // Fallback to minimal profile if DB fails
-                    setUserProfile({
-                        uid: currentUser.uid,
-                        email: currentUser.email || '',
-                        role: 'standard',
-                        createdAt: Date.now()
-                    });
-                }
+                    setLoading(false);
+                }, (err) => {
+                    console.error("Profile Listener Error:", err);
+                    setLoading(false);
+                });
+
             } else {
                 setUserProfile(null);
+                setLoading(false);
             }
-
-            setLoading(false);
         });
-        return unsubscribe;
+
+        return () => {
+            authUnsubscribe();
+            if (profileUnsubscribe) profileUnsubscribe();
+        };
     }, []);
 
     const signInWithGoogle = async () => {

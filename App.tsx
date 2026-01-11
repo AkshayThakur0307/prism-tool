@@ -967,6 +967,18 @@ When using Google Search:
 
     let fullHtml = await marked.parse(currentStageData.output);
 
+    // Append Intelligence Search Execution Results
+    if (currentStageData.searchEntryPointHtml && currentStageData.searchEntryPointHtml.length > 20) {
+      fullHtml += `
+        <div style="margin-top: 40px; border-top: 2px solid #e2e8f0; padding-top: 20px; clear: both; width: 100%; display: block;">
+          <h3>Intelligence Search Execution</h3>
+          <div style="background: #f8fafc; padding: 16px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 13px; overflow-x: auto;">
+            ${currentStageData.searchEntryPointHtml}
+          </div>
+        </div>
+      `;
+    }
+
     // Append Audit Trail (Grounding Sources)
     if (currentStageData.groundingSources && currentStageData.groundingSources.length > 0) {
       fullHtml += `
@@ -1268,13 +1280,15 @@ When using Google Search:
             )}
             <button
               onClick={toggleVoice}
+              disabled={!canEditProject}
               className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-all duration-500 border relative overflow-hidden group
                 ${voice.isActive ? 'bg-indigo-600 border-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:text-indigo-400'}
+                ${!canEditProject ? 'opacity-50 cursor-not-allowed' : ''}
               `}
-              title="Voice Assistant"
+              title={!canEditProject ? "Voice Assistant (View Only)" : "Voice Assistant"}
             >
               {voice.isSpeaking && <div className="absolute inset-0 bg-indigo-400/20 animate-pulse"></div>}
-              <i className={`fas ${voice.isActive ? 'fa-microphone' : 'fa-microphone-slash'} text-xs sm:text-sm z-10 ${voice.isSpeaking ? 'animate-bounce' : ''}`}></i>
+              <i className={`fas ${!canEditProject ? 'fa-microphone-slash' : voice.isActive ? 'fa-microphone' : 'fa-microphone-slash'} text-xs sm:text-sm z-10 ${voice.isSpeaking ? 'animate-bounce' : ''}`}></i>
             </button>
 
             {/* STAGE SPECIFIC ACTIONS */}
@@ -1476,15 +1490,23 @@ When using Google Search:
                   <div className="flex items-center justify-between mb-6 gap-4">
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400 whitespace-nowrap">Module Context</span>
+                      {!canEditProject && (
+                        <div className="bg-slate-900/90 border border-slate-700/50 rounded-md px-1.5 py-0.5 flex items-center gap-1.5 ml-2">
+                          <i className="fas fa-lock text-[9px] text-slate-500"></i>
+                          <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Read Only</span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-3">
                       {voice.isActive && <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></div>}
-                      <VoiceInputTrigger
-                        onStart={handleFieldVoice}
-                        isListening={voice.isActive && !liveSessionRef.current}
-                        size="sm"
-                      />
+                      {canEditProject && (
+                        <VoiceInputTrigger
+                          onStart={handleFieldVoice}
+                          isListening={voice.isActive && !liveSessionRef.current}
+                          size="sm"
+                        />
+                      )}
                       {canUseRefinementStudio && (
                         <RefineInputButton
                           text={currentStageData.input}
@@ -1523,34 +1545,30 @@ When using Google Search:
                       ${!canEditProject ? 'opacity-60 cursor-not-allowed' : ''}
                     `}
                     />
-                    {!canEditProject && (
-                      <div className="absolute top-4 right-4 bg-slate-900/90 border border-slate-700 rounded-lg px-2 py-1 flex items-center gap-2 shadow-lg backdrop-blur-sm pointer-events-none">
-                        <i className="fas fa-lock text-xs text-slate-500"></i>
-                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Read Only</span>
-                      </div>
-                    )}
                   </div>
 
                   {/* URL Management Interface */}
                   <div className="mt-6 space-y-4">
-                    <div className="flex items-center gap-2">
-                      <div className="relative flex-1 group">
-                        <input
-                          type="text"
-                          value={urlInput}
-                          onChange={(e) => setUrlInput(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && handleUrlAdd()}
-                          placeholder="Add reference URL..."
-                          className="w-full bg-slate-950/40 border border-slate-800 rounded-xl px-4 py-2.5 text-[11px] text-white outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500/50 transition-all placeholder:text-slate-600"
-                        />
+                    {canEditProject && (
+                      <div className="flex items-center gap-2">
+                        <div className="relative flex-1 group">
+                          <input
+                            type="text"
+                            value={urlInput}
+                            onChange={(e) => setUrlInput(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleUrlAdd()}
+                            placeholder="Add reference URL..."
+                            className="w-full bg-slate-950/40 border border-slate-800 rounded-xl px-4 py-2.5 text-[11px] text-white outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500/50 transition-all placeholder:text-slate-600"
+                          />
+                        </div>
+                        <button
+                          onClick={handleUrlAdd}
+                          className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 hover:text-indigo-400 hover:border-indigo-500/50 transition-all"
+                        >
+                          <i className="fas fa-plus text-xs"></i>
+                        </button>
                       </div>
-                      <button
-                        onClick={handleUrlAdd}
-                        className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 hover:text-indigo-400 hover:border-indigo-500/50 transition-all"
-                      >
-                        <i className="fas fa-plus text-xs"></i>
-                      </button>
-                    </div>
+                    )}
 
                     {currentStageData.urls && currentStageData.urls.length > 0 && (
                       <div className="flex flex-wrap gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
@@ -1558,12 +1576,14 @@ When using Google Search:
                           <div key={idx} className="flex items-center gap-2 px-3 py-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-lg max-w-full">
                             <i className="fas fa-link text-[10px] text-indigo-400 shrink-0"></i>
                             <span className="text-[10px] font-bold text-slate-300 truncate max-w-[150px]">{url.replace(/^https?:\/\//, '')}</span>
-                            <button
-                              onClick={() => handleUrlRemove(url)}
-                              className="text-slate-500 hover:text-rose-500 transition-colors ml-1 shrink-0"
-                            >
-                              <i className="fas fa-times text-[10px]"></i>
-                            </button>
+                            {canEditProject && (
+                              <button
+                                onClick={() => handleUrlRemove(url)}
+                                className="text-slate-500 hover:text-rose-500 transition-colors ml-1 shrink-0"
+                              >
+                                <i className="fas fa-times text-[10px]"></i>
+                              </button>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -1572,13 +1592,15 @@ When using Google Search:
 
                   <div className="mt-8 space-y-4">
                     <div>
-                      <div className="relative border-2 border-dashed border-slate-800 rounded-2xl p-4 group hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-all cursor-pointer text-center">
-                        <input type="file" multiple accept="image/*,video/*,application/pdf,text/plain" onChange={(e) => handleFileUpload(e)} className="absolute inset-0 opacity-0 cursor-pointer" title="Attach Stage Assets" />
-                        <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform">
-                          <i className="fas fa-plus text-slate-400 group-hover:text-indigo-400"></i>
+                      {canEditProject && (
+                        <div className="relative border-2 border-dashed border-slate-800 rounded-2xl p-4 group hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-all cursor-pointer text-center">
+                          <input type="file" multiple accept="image/*,video/*,application/pdf,text/plain" onChange={(e) => handleFileUpload(e)} className="absolute inset-0 opacity-0 cursor-pointer" title="Attach Stage Assets" />
+                          <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform">
+                            <i className="fas fa-plus text-slate-400 group-hover:text-indigo-400"></i>
+                          </div>
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Attach Stage Assets</p>
                         </div>
-                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Attach Stage Assets</p>
-                      </div>
+                      )}
 
                       {/* DYNAMIC ASSET LIST */}
                       {currentStageData.files.length > 0 && (
@@ -1594,13 +1616,15 @@ When using Google Search:
                                   <p className="text-[9px] text-slate-500 uppercase tracking-tighter">{(file.size / 1024).toFixed(1)} KB</p>
                                 </div>
                               </div>
-                              <button
-                                onClick={() => removeFile(file.name)}
-                                className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 transition-all opacity-0 group-hover:opacity-100"
-                                title="Remove asset"
-                              >
-                                <i className="fas fa-times text-xs"></i>
-                              </button>
+                              {canEditProject && (
+                                <button
+                                  onClick={() => removeFile(file.name)}
+                                  className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 transition-all opacity-0 group-hover:opacity-100"
+                                  title="Remove asset"
+                                >
+                                  <i className="fas fa-times text-xs"></i>
+                                </button>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -1608,32 +1632,57 @@ When using Google Search:
                     </div>
 
                     {state.currentStage !== DiscoveryStage.DOMAIN && (
-                      <div className="relative border-2 border-dashed border-slate-800 rounded-2xl p-4 group hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-all cursor-pointer text-center">
-                        {!currentStageData.formatReference ? (
-                          <>
-                            <input type="file" accept="image/*,video/*,application/pdf,text/plain" onChange={(e) => handleFileUpload(e, true)} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
-                            <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform">
-                              <i className="fas fa-file-signature text-slate-400 group-hover:text-indigo-400"></i>
+                      <div className={`relative border-2 border-dashed ${!canEditProject ? 'border-slate-800/50 bg-slate-900/20' : 'border-slate-800 hover:border-indigo-500/50 hover:bg-indigo-500/5 cursor-pointer'} rounded-2xl p-4 group transition-all text-center`}>
+                        {canEditProject ? (
+                          !currentStageData.formatReference ? (
+                            <>
+                              <input type="file" accept="image/*,video/*,application/pdf,text/plain" onChange={(e) => handleFileUpload(e, true)} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
+                              <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform">
+                                <i className="fas fa-file-signature text-slate-400 group-hover:text-indigo-400"></i>
+                              </div>
+                              <p className="text-[10px] font-bold text-slate-500 group-hover:text-indigo-400 uppercase tracking-widest transition-colors">Upload Format Reference</p>
+                            </>
+                          ) : (
+                            <div className="relative z-20">
+                              <div className="w-10 h-10 bg-emerald-600/20 rounded-full flex items-center justify-center mx-auto mb-2">
+                                <i className="fas fa-check-circle text-emerald-400"></i>
+                              </div>
+                              <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-2">Reference Locked</p>
+                              <div className="flex items-center justify-between gap-2 text-[9px] text-emerald-400 font-bold uppercase truncate px-3 py-1 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
+                                <span className="truncate">{currentStageData.formatReference.name}</span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeFormatReference(); }}
+                                  className="text-emerald-500 hover:text-rose-500 transition-colors p-1 ml-2 relative z-30 pointer-events-auto"
+                                  title="Remove reference"
+                                >
+                                  <i className="fas fa-times-circle text-sm"></i>
+                                </button>
+                              </div>
                             </div>
-                            <p className="text-[10px] font-bold text-slate-500 group-hover:text-indigo-400 uppercase tracking-widest transition-colors">Upload Format Reference</p>
-                          </>
+                          )
                         ) : (
-                          <div className="relative z-20">
-                            <div className="w-10 h-10 bg-emerald-600/20 rounded-full flex items-center justify-center mx-auto mb-2">
-                              <i className="fas fa-check-circle text-emerald-400"></i>
-                            </div>
-                            <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-2">Reference Locked</p>
-                            <div className="flex items-center justify-between gap-2 text-[9px] text-emerald-400 font-bold uppercase truncate px-3 py-1 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
-                              <span className="truncate">{currentStageData.formatReference.name}</span>
-                              <button
-                                type="button"
-                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeFormatReference(); }}
-                                className="text-emerald-500 hover:text-rose-500 transition-colors p-1 ml-2 relative z-30 pointer-events-auto"
-                                title="Remove reference"
-                              >
-                                <i className="fas fa-times-circle text-sm"></i>
-                              </button>
-                            </div>
+                          /* View Only State */
+                          <div className="opacity-60 cursor-not-allowed">
+                            {!currentStageData.formatReference ? (
+                              <div className="flex flex-col items-center">
+                                <div className="w-10 h-10 bg-slate-800/50 rounded-full flex items-center justify-center mx-auto mb-2">
+                                  <i className="fas fa-ban text-slate-600"></i>
+                                </div>
+                                <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">No Reference Format</p>
+                              </div>
+                            ) : (
+                              <div className="relative z-20">
+                                <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-2">
+                                  <i className="fas fa-file-alt text-slate-400"></i>
+                                </div>
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Reference Format</p>
+                                <div className="inline-flex items-center justify-center gap-2 text-[9px] text-slate-400 font-bold uppercase truncate px-3 py-1 bg-slate-800/50 rounded-lg border border-slate-700">
+                                  <span className="truncate">{currentStageData.formatReference.name}</span>
+                                  <i className="fas fa-lock text-[8px] opacity-50 ml-1"></i>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1651,7 +1700,7 @@ When using Google Search:
                           <p className="text-[8px] text-slate-500 mt-1 uppercase font-bold tracking-widest">Enhanced Synthesis</p>
                         </div>
                       </div>
-                      <div className="relative inline-flex items-center cursor-pointer group/lock">
+                      <label className="relative inline-flex items-center cursor-pointer group/lock">
                         <input
                           type="checkbox"
                           className="sr-only peer"
@@ -1661,7 +1710,7 @@ When using Google Search:
                         />
                         <div className={`w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600 ${!canUseAdvancedAI ? 'opacity-50' : ''}`}></div>
                         {!canUseAdvancedAI && <i className="fas fa-lock text-amber-500 text-xs absolute -left-5"></i>}
-                      </div>
+                      </label>
                     </div>
 
                     <div className="flex items-center justify-between p-3 rounded-2xl bg-amber-500/5 border border-amber-500/10 transition-all hover:bg-amber-500/10">
@@ -1674,7 +1723,7 @@ When using Google Search:
                           <p className="text-[8px] text-slate-500 mt-1 uppercase font-bold tracking-widest">External Validation</p>
                         </div>
                       </div>
-                      <div className="relative inline-flex items-center cursor-pointer group/lock">
+                      <label className="relative inline-flex items-center cursor-pointer group/lock">
                         <input
                           type="checkbox"
                           className="sr-only peer"
@@ -1684,7 +1733,7 @@ When using Google Search:
                         />
                         <div className={`w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600 ${!canUseAdvancedAI ? 'opacity-50' : ''}`}></div>
                         {!canUseAdvancedAI && <i className="fas fa-lock text-amber-500 text-xs absolute -left-5"></i>}
-                      </div>
+                      </label>
                     </div>
                   </div>
 
@@ -1706,11 +1755,12 @@ When using Google Search:
                       </div>
                       <button
                         onClick={runAnalysis}
-                        disabled={!!analyzingStage || (!currentStageData.input && currentStageData.files.length === 0)}
+                        disabled={!!analyzingStage || (!currentStageData.input && currentStageData.files.length === 0) || !canEditProject}
+                        title={!canEditProject ? "View Only Mode" : ""}
                         className="w-full py-4 sm:py-5 btn-grad rounded-2xl text-[11px] sm:text-[12px] font-black uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
                       >
                         <div className="flex items-center gap-2.5">
-                          {analyzingStage === state.currentStage ? <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div> : <><i className="fas fa-wand-sparkles text-sm translate-y-[0.5px]"></i><span>{config.cta}</span></>}
+                          {analyzingStage === state.currentStage ? <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div> : <><i className={`fas ${!canEditProject ? 'fa-lock' : 'fa-wand-sparkles'} text-sm translate-y-[0.5px]`}></i><span>{config.cta}</span></>}
                         </div>
                       </button>
                     </>
@@ -1740,27 +1790,33 @@ When using Google Search:
                                 <div className="flex items-center justify-between mb-2">
                                   <label className="block text-[10px] font-bold text-slate-400 leading-relaxed opacity-70 group-hover:opacity-100 transition-opacity">{q}</label>
                                   <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <VoiceInputTrigger
-                                      onStart={handleFieldVoice}
-                                      isListening={voice.isActive && !liveSessionRef.current}
-                                      size="sm"
-                                    />
-                                    <RefineInputButton
-                                      text={currentStageData.answers[i.toString()] || ''}
-                                      onRefine={(newText) => handleAnswerChange(i, newText)}
-                                      contextType={`Answer to: ${q}`}
-                                      size="sm"
-                                    />
+                                    {canEditProject && (
+                                      <>
+                                        <VoiceInputTrigger
+                                          onStart={handleFieldVoice}
+                                          isListening={voice.isActive && !liveSessionRef.current}
+                                          size="sm"
+                                        />
+                                        <RefineInputButton
+                                          text={currentStageData.answers[i.toString()] || ''}
+                                          onRefine={(newText) => handleAnswerChange(i, newText)}
+                                          contextType={`Answer to: ${q}`}
+                                          size="sm"
+                                        />
+                                      </>
+                                    )}
                                   </div>
                                 </div>
                                 <textarea
                                   rows={2}
                                   value={currentStageData.answers[i.toString()] || ''}
                                   onChange={(e) => handleAnswerChange(i, e.target.value)}
+                                  readOnly={!canEditProject}
                                   className={`w-full bg-slate-950/60 border rounded-xl p-3 text-[11px] text-white outline-none focus:ring-4 focus:ring-indigo-500/5 transition-all resize-none font-medium
+                                  ${!canEditProject ? 'opacity-50 cursor-not-allowed' : ''}
                                   ${voice.isActive ? 'border-indigo-500/40 shadow-[0_0_10px_rgba(99,102,241,0.1)]' : 'border-slate-800 focus:border-indigo-500/50'}
                                 `}
-                                  placeholder="Provide details..."
+                                  placeholder={canEditProject ? "Provide details..." : "No input provided"}
                                 />
                               </div>
                             ))}
@@ -1787,7 +1843,8 @@ When using Google Search:
 
                     <button
                       onClick={runAnalysis}
-                      disabled={!!analyzingStage}
+                      disabled={!!analyzingStage || !canEditProject}
+                      title={!canEditProject ? "View Only Mode" : ""}
                       className="w-full py-4 sm:py-5 btn-grad rounded-2xl text-[11px] sm:text-[12px] font-black uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed shadow-xl shadow-indigo-500/10"
                     >
                       <div className="flex items-center gap-2.5">
@@ -1955,15 +2012,17 @@ When using Google Search:
                           <>
                             <button
                               onClick={openRefinementModal}
-                              className="w-8 h-8 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center transition-all shadow-lg shadow-indigo-600/20 group"
-                              title="Open AI Refinement Studio"
+                              disabled={!canEditProject}
+                              className={`w-8 h-8 rounded-lg ${canEditProject ? 'bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/20' : 'bg-slate-800 text-slate-600 cursor-not-allowed opacity-50'} text-white flex items-center justify-center transition-all group`}
+                              title={canEditProject ? "Open AI Refinement Studio" : "Refinement Studio (View Only)"}
                             >
                               <i className="fas fa-wand-magic-sparkles text-xs group-hover:animate-pulse"></i>
                             </button>
                             <button
                               onClick={activeEditMode}
-                              className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 hover:text-white text-slate-400 flex items-center justify-center transition-all"
-                              title="Manual Edit"
+                              disabled={!canEditProject}
+                              className={`w-8 h-8 rounded-lg bg-slate-800 ${canEditProject ? 'hover:bg-slate-700 hover:text-white text-slate-400' : 'text-slate-600 cursor-not-allowed opacity-50'} flex items-center justify-center transition-all`}
+                              title={canEditProject ? "Manual Edit" : "Manual Edit (View Only)"}
                             >
                               <i className="fas fa-pencil-alt text-xs"></i>
                             </button>

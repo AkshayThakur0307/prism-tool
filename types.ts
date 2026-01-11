@@ -73,6 +73,12 @@ export interface Project extends AppState {
   name: string;
   createdAt: number;
   updatedAt: number;
+  sharedWith?: Record<string, {
+    email: string;
+    role: 'viewer';
+    sharedAt: number;
+    sharedBy: string;
+  }>;
 }
 
 export interface VoiceState {
