@@ -22,6 +22,7 @@ import { useAuth } from './src/contexts/AuthContext';
 import { useRBAC } from './src/hooks/useRBAC';
 import AdminUserModal from './components/AdminUserModal';
 import { ShareProjectModal } from './components/ShareProjectModal';
+import { EstimationSheet } from './components/EstimationSheet';
 
 const INITIAL_METADATA: ProjectMetadata = {
   companyName: '',
@@ -166,6 +167,8 @@ const App: React.FC = () => {
 
   // Jira State
   const [showJiraSync, setShowJiraSync] = useState(false);
+  const [showEstimationStudio, setShowEstimationStudio] = useState(false);
+  const [projectId, setProjectId] = useState<string | null>(null);
   const [isJiraSyncing, setIsJiraSyncing] = useState(false);
   const [jiraSyncProgress, setJiraSyncProgress] = useState('');
   const [jiraConfig, setJiraConfig] = useState({
@@ -2039,15 +2042,24 @@ When using Google Search:
 
                   {/* JIRA INTEGRATION PANEL (New Feature) */}
                   {state.currentStage === DiscoveryStage.EPICS && (
-                    <div className="report-card border-indigo-500/30 bg-indigo-600/5 mb-8 overflow-hidden group">
+                    <div className="report-card border-indigo-500/30 bg-indigo-600/5 mb-8">
                       <div className="flex items-center justify-between mb-6">
                         <div className="flex items-center gap-4">
                           <div className="w-10 h-10 bg-[#0052CC] rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/20">
                             <i className="fab fa-jira text-white text-lg"></i>
                           </div>
                           <div>
-                            <h5 className="text-[12px] font-black uppercase tracking-widest text-indigo-400 leading-none mb-1">Jira Cloud Synchronization</h5>
-                            <p className="text-[9px] text-slate-500 uppercase font-bold tracking-tighter">Bridge strategy to execution</p>
+                            <h5 className="text-[12px] font-black uppercase tracking-widest text-indigo-400 leading-none mb-1 flex items-center gap-2">
+                              Jira Cloud Synchronization
+                              <div className="relative">
+                                <i className="fas fa-info-circle text-indigo-600/50 hover:text-indigo-400 cursor-help transition-colors text-[10px] peer"></i>
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-900 text-slate-200 text-[10px] font-medium rounded-lg opacity-0 peer-hover:opacity-100 transition-opacity whitespace-normal pointer-events-none shadow-xl border border-slate-700 z-10 w-64 text-center">
+                                  Push your Epics and User Stories directly to Jira to start your development workflow.
+                                  <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900"></div>
+                                </div>
+                              </div>
+                            </h5>
+                            <p className="text-[9px] text-slate-500 uppercase font-bold tracking-tighter">Workflow Integration</p>
                           </div>
                         </div>
                         {!showJiraSync ? (
@@ -2131,6 +2143,45 @@ When using Google Search:
                           </div>
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {/* ESTIMATION STUDIO (Launch Card) */}
+                  {state.currentStage === DiscoveryStage.EPICS && (
+                    <div className="report-card border-emerald-500/30 bg-emerald-600/5 mb-8">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-600/20">
+                            <i className="fas fa-calculator text-white text-lg"></i>
+                          </div>
+                          <div>
+                            <h5 className="text-[12px] font-black uppercase tracking-widest text-emerald-400 leading-none mb-1 flex items-center gap-2">
+                              Estimation Studio
+                              <div className="relative">
+                                <i className="fas fa-info-circle text-emerald-600/50 hover:text-emerald-400 cursor-help transition-colors text-[10px] peer"></i>
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-900 text-slate-200 text-[10px] font-medium rounded-lg opacity-0 peer-hover:opacity-100 transition-opacity whitespace-normal pointer-events-none shadow-xl border border-slate-700 z-10 w-64 text-center">
+                                  Use the Estimation Studio to plan sprints, calculate effort, and define confidence levels.
+                                  <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900"></div>
+                                </div>
+                              </div>
+                            </h5>
+                            <p className="text-[9px] text-slate-500 uppercase font-bold tracking-tighter">Technical Effort & Planning</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {state.stages[DiscoveryStage.EPICS].estimationSheetData && (
+                            <span className="text-[9px] text-emerald-400 font-bold uppercase tracking-wide flex items-center gap-1.5 bg-emerald-900/20 px-2.5 py-1.5 rounded-lg border border-emerald-500/20">
+                              <i className="fas fa-check-circle"></i> Saved
+                            </span>
+                          )}
+                          <button
+                            onClick={() => setShowEstimationStudio(true)}
+                            className="px-4 py-2 rounded-xl bg-emerald-600 text-[10px] font-black text-white uppercase tracking-widest hover:bg-emerald-500 transition-all flex items-center gap-2 shadow-lg shadow-emerald-600/20"
+                          >
+                            <i className="fas fa-external-link-alt"></i> Open Studio
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
 
@@ -2746,6 +2797,32 @@ When using Google Search:
           projectName={state.projectMetadata.companyName || 'Untitled Project'}
           onClose={() => setShowShareModal(false)}
         />
+      )}
+
+      {/* ESTIMATION STUDIO FULL SCREEN OVERLAY */}
+      {showEstimationStudio && (
+        <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col animate-in fade-in duration-300">
+          {/* Note: Header is handled inside EstimationSheet with onClose prop */}
+          <div className="flex-1 overflow-hidden">
+            <EstimationSheet
+              initialMarkdown={state.stages[DiscoveryStage.EPICS]?.output || ''}
+              className="h-full rounded-none"
+              onClose={() => setShowEstimationStudio(false)}
+              onSave={(data) => {
+                setState(prev => ({
+                  ...prev,
+                  stages: {
+                    ...prev.stages,
+                    [DiscoveryStage.EPICS]: {
+                      ...prev.stages[DiscoveryStage.EPICS],
+                      estimationSheetData: data
+                    }
+                  }
+                }));
+              }}
+            />
+          </div>
+        </div>
       )}
 
     </div >

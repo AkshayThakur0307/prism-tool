@@ -87,7 +87,17 @@ export const STAGE_CONFIGS = {
     Convert everything into high-level Engineering Epics and granular User Stories. 
     Address both Functional and Non-Functional requirements (Security, Performance, Scale).
     IMPORTANT: If a reference format file is provided, strictly use its Story and Epic templates.
-    For each Epic: provide User Story (As a... I want... So that...) and Acceptance Criteria.
+
+    CRITICAL OUTPUT FORMATTING RULES (Required for Auto-Parsing):
+    1. You MUST start each Epic with a header in this exact format: "## Epic [Number]: [Name]"
+    2. You MUST start each User Story with a header in this exact format: "### Story [Number]: [Name]"
+    3. Under each story header, provide the "As a... I want... So that..." description and a list of Acceptance Criteria.
+    
+    Example:
+    ## Epic 1: Authentication Core
+    ### Story 1: User Login
+    As a user...
+    
     Your output MUST include a final "### CLARIFICATION QUESTIONS" section for any implementation ambiguities.`,
     statusMessages: [
       "Decomposing into epics...",

@@ -52,6 +52,7 @@ export interface StageData {
   searchEntryPointHtml?: string; // HTML snippet showing search queries
   versions: StageVersion[];
   coherenceScore: number;
+  estimationSheetData?: any; // JSON string or object for spreadsheet state
 }
 
 export interface ProjectSettings {
