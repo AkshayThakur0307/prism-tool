@@ -292,6 +292,22 @@ export async function refineInputText(text: string, contextType: string = 'gener
 
   } catch (error) {
     console.error("Refinement Failed:", error);
-    return text; // Return original if failed
+    console.log("Initiating Failover to Groq for Refinement...");
+
+    try {
+      // Failover to Groq
+      const groqResponse = await callGroqAgent(
+        'openai/gpt-oss-120b', // Fallback model
+        'You are an expert technical editor.', // System instruction
+        prompt,
+        [],
+        false, // No thinking
+        false  // No search
+      );
+      return groqResponse.text || text;
+    } catch (groqError) {
+      console.error("Groq Refinement also failed:", groqError);
+      return text; // Return original if both fail
+    }
   }
 }
