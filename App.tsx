@@ -1342,34 +1342,55 @@ When using Google Search:
     }
   };
 
-  const SidebarContent = () => (
+  // Sidebar State
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  const SidebarContent = ({ isCollapsed = false, onToggle }: { isCollapsed?: boolean, onToggle?: () => void }) => (
     <>
-      <div className="mb-10 px-2 flex items-center gap-4">
-        <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-600/20 shrink-0">
-          <i className="fas fa-layer-group text-white text-lg"></i>
+      <div className={`mb-8 flex items-center ${isCollapsed ? 'justify-center flex-col gap-4' : 'justify-between px-2'} transition-all duration-300 relative`}>
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-600/20 shrink-0">
+            <i className="fas fa-layer-group text-white text-lg"></i>
+          </div>
+          {!isCollapsed && (
+            <div className="min-w-0 animate-in fade-in duration-300">
+              <h1 className="text-lg font-black text-white tracking-tighter uppercase leading-none truncate">DISCOVERY PRO</h1>
+              <p className="text-[9px] text-indigo-400 font-bold tracking-[0.2em] mt-1 uppercase">PRSIM.AI Material +</p>
+            </div>
+          )}
         </div>
-        <div className="min-w-0">
-          <h1 className="text-lg font-black text-white tracking-tighter uppercase leading-none truncate">DISCOVERY PRO</h1>
-          <p className="text-[9px] text-indigo-400 font-bold tracking-[0.2em] mt-1 uppercase">PRSIM.AI Material +</p>
-        </div>
+
+        {/* Collapse Toggle Button (Desktop Only) */}
+        {onToggle && (
+          <button
+            onClick={onToggle}
+            className={`w-6 h-6 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-colors border border-slate-700 ${isCollapsed ? 'mt-2' : ''}`}
+            title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+          >
+            <i className={`fas fa-chevron-${isCollapsed ? 'right' : 'left'} text-xs`}></i>
+          </button>
+        )}
       </div>
 
-      <div className="flex-1 space-y-4">
+      <div className={`flex-1 ${isCollapsed ? 'space-y-2' : 'space-y-4'}`}>
         <button
           onClick={() => setShowProjectConfig(true)}
-          className={`w-full text-left p-4 rounded-2xl transition-all duration-300 group relative flex items-center gap-4 overflow-hidden border border-dashed border-indigo-500/30 hover:bg-indigo-600/10 hover:border-indigo-500 text-indigo-400`}
+          className={`w-full text-left rounded-2xl transition-all duration-300 group relative flex items-center gap-4 overflow-hidden border border-dashed border-indigo-500/30 hover:bg-indigo-600/10 hover:border-indigo-500 text-indigo-400 ${isCollapsed ? 'p-2 justify-center' : 'p-4'}`}
+          title={isCollapsed ? "Global Context" : undefined}
         >
           <div className="w-10 h-10 rounded-xl bg-indigo-600/10 flex items-center justify-center shrink-0">
             <i className="fas fa-briefcase"></i>
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-[10px] font-black uppercase tracking-widest opacity-60">Global Context</div>
-            <div className="text-[11px] font-bold truncate">{state.projectMetadata.companyName || 'Configure Project'}</div>
-          </div>
-          <i className="fas fa-cog text-xs opacity-50"></i>
+          {!isCollapsed && (
+            <div className="flex-1 min-w-0 animate-in fade-in duration-300">
+              <div className="text-[10px] font-black uppercase tracking-widest opacity-60">Global Context</div>
+              <div className="text-[11px] font-bold truncate">{state.projectMetadata.companyName || 'Configure Project'}</div>
+            </div>
+          )}
+          {!isCollapsed && <i className="fas fa-cog text-xs opacity-50"></i>}
         </button>
 
-        <div className="h-4"></div>
+        <div className={`h-[1px] bg-slate-800/50 mx-2 my-2 ${isCollapsed ? 'mx-4' : ''}`}></div>
 
         {(Object.values(DiscoveryStage) as DiscoveryStage[]).map((stage, idx) => {
           const isActive = state.currentStage === stage;
@@ -1392,9 +1413,11 @@ When using Google Search:
                 setIsMobileMenuOpen(false);
                 setShowHistory(false);
               }}
-              className={`w-full text-left p-4 rounded-2xl transition-all duration-300 group relative flex items-center gap-4 overflow-hidden border
+              className={`w-full text-left rounded-2xl transition-all duration-300 group relative flex items-center gap-4 overflow-hidden border
                 ${isActive ? 'bg-indigo-600/10 border-indigo-500/50 text-white shadow-inner' : 'hover:bg-slate-800/40 text-slate-500 border-transparent'}
+                ${isCollapsed ? 'p-2 justify-center' : 'p-4'}
               `}
+              title={isCollapsed ? stageConfig.title : undefined}
             >
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm transition-all duration-500 shrink-0
                 ${isActive ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : isDone ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-slate-800/50 text-slate-600 border border-slate-700/50'}
@@ -1407,78 +1430,119 @@ When using Google Search:
                   stageConfig.icon
                 )}
               </div>
-              <div className="flex-1 min-w-0 flex flex-col justify-center">
-                <div className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-1 leading-none">Module 0{idx + 1}</div>
-                <div className={`text-[12px] font-bold leading-tight truncate ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-300'}`}>
-                  {stageConfig.title}
+              {!isCollapsed && (
+                <div className="flex-1 min-w-0 flex flex-col justify-center animate-in fade-in duration-300">
+                  <div className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-1 leading-none">Module 0{idx + 1}</div>
+                  <div className={`text-[12px] font-bold leading-tight truncate ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-300'}`}>
+                    {stageConfig.title}
+                  </div>
                 </div>
-              </div>
-              {isActive && <div className="shrink-0 w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_#6366f1] animate-pulse ml-2"></div>}
+              )}
+              {isActive && !isCollapsed && <div className="shrink-0 w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_#6366f1] animate-pulse ml-2"></div>}
             </button>
           );
         })}
       </div>
 
-      <div className="pt-6 border-t border-slate-800/50 mt-6 shrink-0">
+      <div className={`border-t border-slate-800/50 shrink-0 transition-all duration-300 ${isCollapsed ? 'pt-4 mt-4 border-transparent' : 'pt-6 mt-6'}`}>
         {/* Auth Profile Section */}
-        <div className="p-3 rounded-2xl bg-slate-800/40 border border-slate-700/50 flex items-center gap-3 mb-3 relative group cursor-pointer hover:bg-slate-800/60 transition-colors"
+        <div className={`rounded-2xl bg-slate-800/40 border border-slate-700/50 flex items-center gap-3 mb-3 relative group cursor-pointer hover:bg-slate-800/60 transition-colors ${isCollapsed ? 'p-2 justify-center border-transparent bg-transparent hover:bg-transparent' : 'p-3'}`}
           onClick={() => setShowProjectList(true)}
+          title={isCollapsed ? user?.displayName || 'User' : undefined}
         >
           {user?.photoURL ? (
-            <img src={user.photoURL} alt="User" className="w-8 h-8 rounded-full border border-slate-600" />
+            <img src={user.photoURL} alt="User" className="w-8 h-8 rounded-full border border-slate-600 shrink-0" />
           ) : (
-            <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold border border-indigo-400">
+            <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold border border-indigo-400 shrink-0">
               {user?.displayName ? user.displayName.charAt(0).toUpperCase() : 'U'}
             </div>
           )}
-          <div className="flex-1 min-w-0">
-            <div className="text-[11px] font-bold text-slate-200 truncate">{state.projectMetadata.companyName || 'Untitled Project'}</div>
-            <div className="text-[9px] text-slate-500 truncate flex items-center gap-1">
-              <i className="fas fa-folder text-[8px]"></i>
-              <span>Switch Project</span>
-              <i className="fas fa-chevron-right text-[8px] ml-1 opacity-50"></i>
-            </div>
-          </div>
 
-          {isAdmin && (
+          {!isCollapsed && (
+            <>
+              <div className="flex-1 min-w-0 animate-in fade-in duration-300">
+                <div className="text-[11px] font-bold text-slate-200 truncate">{state.projectMetadata.companyName || 'Untitled Project'}</div>
+                <div className="text-[9px] text-slate-500 truncate flex items-center gap-1">
+                  <i className="fas fa-folder text-[8px]"></i>
+                  <span>Switch Project</span>
+                  <i className="fas fa-chevron-right text-[8px] ml-1 opacity-50"></i>
+                </div>
+              </div>
+
+              {isAdmin && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowAdminModal(true); }}
+                  className="w-8 h-8 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 flex items-center justify-center text-rose-500 transition-colors shrink-0"
+                  title="Admin Console"
+                >
+                  <i className="fas fa-users-cog text-xs"></i>
+                </button>
+              )}
+
+              <button
+                onClick={(e) => { e.stopPropagation(); logout(); }}
+                className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-colors border border-slate-700 shrink-0"
+                title="Sign Out"
+              >
+                <i className="fas fa-sign-out-alt text-xs"></i>
+              </button>
+            </>
+          )}
+        </div>
+
+        <div className={`flex items-center gap-2 ${isCollapsed ? 'flex-col justify-center' : ''}`}>
+          {/* Collapsed Mode Icons */}
+          {isCollapsed && isAdmin && (
             <button
-              onClick={(e) => { e.stopPropagation(); setShowAdminModal(true); }}
-              className="w-8 h-8 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 flex items-center justify-center text-rose-500 transition-colors ml-1 shrink-0"
+              onClick={() => setShowAdminModal(true)}
+              className="w-10 h-10 p-0 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 flex items-center justify-center text-rose-500 transition-colors border border-rose-500/20 mb-2"
               title="Admin Console"
             >
               <i className="fas fa-users-cog text-xs"></i>
             </button>
           )}
+
+          {/* Product Manual Button - Always Visible */}
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              logout();
-            }}
-            className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-white flex items-center justify-center transition-all duration-200 border border-slate-700 hover:border-rose-500/30 shrink-0 ml-1"
-            title="Sign Out"
+            onClick={() => setShowManual(true)}
+            className={`bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 flex items-center justify-center gap-2 group transition-all text-indigo-400 ${isCollapsed ? 'w-10 h-10 p-0 rounded-xl' : 'flex-1 p-3 rounded-2xl'}`}
+            title="Product Manual"
           >
-            <i className="fas fa-sign-out-alt text-xs"></i>
+            <i className="fas fa-book-open text-xs group-hover:scale-110 transition-transform"></i>
+            {!isCollapsed && <span className="text-[10px] font-bold uppercase tracking-wider">Manual</span>}
           </button>
+
+          {/* Logout Button - Collapsed Mode Only */}
+          {isCollapsed && (
+            <button
+              onClick={logout}
+              className="w-10 h-10 p-0 rounded-xl mt-2 bg-slate-800 hover:bg-red-500/10 border border-slate-700 hover:border-red-500/50 flex items-center justify-center text-slate-400 hover:text-red-400 transition-colors"
+              title="Sign Out"
+            >
+              <i className="fas fa-sign-out-alt text-xs"></i>
+            </button>
+          )}
         </div>
 
-        <div className="p-4 rounded-2xl bg-slate-950/50 border border-slate-800/50 text-[9px] text-slate-500 space-y-1">
-          <div className="flex justify-between"><span>Compute</span> <span className="text-slate-400">Grok-3</span></div>
-          <div className="flex justify-between"><span>Team</span> <span className="text-slate-400">M+ Product Team : Beta</span></div>
-          <div className="flex justify-between"><span>Security</span> <span className="text-emerald-500 font-bold">ENCRYPTED</span></div>
-        </div>
+        {!isCollapsed && (
+          <div className="mt-4 p-4 rounded-2xl bg-slate-950/50 border border-slate-800/50 text-[9px] text-slate-500 space-y-1 animate-in fade-in duration-300">
+            <div className="flex justify-between"><span>Compute</span> <span className="text-slate-400">Gemini & Groq</span></div>
+            <div className="flex justify-between"><span>Developed by</span> <span className="text-slate-400">M+ Product Team: <span className="text-amber-400 font-bold">BETA</span></span></div>
+            <div className="flex justify-between"><span>Security</span> <span className="text-emerald-500 font-bold">ENCRYPTED</span></div>
+          </div>
+        )}
       </div>
     </>
   );
 
   return (
     <div className="flex h-screen bg-[#020617] relative">
-      <nav className="hidden lg:flex w-80 bg-slate-900/40 border-r border-slate-800 flex-col p-6 backdrop-blur-3xl shrink-0 overflow-y-auto print:hidden">
-        <SidebarContent />
+      <nav className={`hidden lg:flex bg-slate-900/40 border-r border-slate-800 flex-col backdrop-blur-3xl shrink-0 overflow-y-auto print:hidden transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'w-24 px-2 py-6' : 'w-80 p-6'}`}>
+        <SidebarContent isCollapsed={isSidebarCollapsed} onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)} />
       </nav>
 
       <div
         className={`fixed inset-0 z-50 bg-black/60 backdrop-blur-sm lg:hidden transition-opacity duration-300 ${isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
-        onClick={() => isMetadataComplete && setIsMobileMenuOpen(false)}
       >
         <nav
           className={`absolute left-0 top-0 bottom-0 w-80 bg-slate-900 border-r border-slate-800 flex flex-col p-6 transition-transform duration-300 transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
