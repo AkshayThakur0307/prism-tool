@@ -1852,7 +1852,16 @@ When using Google Search:
 
 
 
-          <div className="max-w-[1400px] mx-auto p-4 sm:p-5 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12 items-stretch h-full print:block relative z-30">
+          {!isSidebarOpen && (
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="absolute left-0 top-1/2 -translate-y-1/2 z-40 w-6 h-12 bg-indigo-600 rounded-r-xl flex items-center justify-center hover:bg-indigo-500 shadow-lg transition-all group"
+              title="Expand Sidebar"
+            >
+              <i className="fas fa-chevron-right text-xs text-white group-hover:scale-110 transition-transform"></i>
+            </button>
+          )}
+          <div className="max-w-[1400px] mx-auto p-4 sm:p-5 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-6 items-stretch h-full print:block relative z-30">
 
             {isSidebarOpen && (
               <div
@@ -2210,7 +2219,7 @@ When using Google Search:
 
                   {!currentStageData.output && (
                     <>
-                      <div className="mt-3 mb-4">
+                      <div className="mt-2 mb-3">
                         <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-800/20 border border-slate-700/50 transition-all hover:bg-slate-800/40">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-800 text-slate-400">
@@ -2228,7 +2237,7 @@ When using Google Search:
                         onClick={runAnalysis}
                         disabled={!!analyzingStage || (!currentStageData.input && currentStageData.files.length === 0) || !canEditProject}
                         title={!canEditProject ? "View Only Mode" : ""}
-                        className="w-full py-4 sm:py-5 btn-grad rounded-2xl text-[11px] sm:text-[12px] font-black uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="w-[98%] mx-auto py-3 sm:py-4 btn-grad rounded-2xl text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-transform"
                       >
                         <div className="flex items-center gap-2.5">
                           {analyzingStage === state.currentStage ? <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div> : <><i className={`fas ${!canEditProject ? 'fa-lock' : 'fa-wand-sparkles'} text-sm translate-y-[0.5px]`}></i><span>{config.cta}</span></>}
@@ -2297,7 +2306,7 @@ When using Google Search:
                     )}
 
                     {/* REGENERATION MODEL SELECTOR */}
-                    <div className="mb-4">
+                    <div className="mb-3">
                       <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-800/40 border border-slate-700/50 transition-all hover:bg-slate-800/60">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-800 text-slate-400">
@@ -2316,7 +2325,7 @@ When using Google Search:
                       onClick={runAnalysis}
                       disabled={!!analyzingStage || !canEditProject}
                       title={!canEditProject ? "View Only Mode" : ""}
-                      className="w-full py-4 sm:py-5 btn-grad rounded-2xl text-[11px] sm:text-[12px] font-black uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed shadow-xl shadow-indigo-500/10"
+                      className="w-[98%] mx-auto py-3 sm:py-4 btn-grad rounded-2xl text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed shadow-xl shadow-indigo-500/10 transition-transform"
                     >
                       <div className="flex items-center gap-2.5">
                         {analyzingStage === state.currentStage ? (
@@ -2347,15 +2356,8 @@ When using Google Search:
               }}
               className={`${isSidebarOpen ? 'lg:col-span-7' : 'lg:col-span-12'} flex flex-col gap-6 lg:gap-8 print:block relative transition-all duration-300 h-full overflow-y-auto custom-scrollbar pr-2`}
             >
-              {!isSidebarOpen && (
-                <button
-                  onClick={() => setIsSidebarOpen(true)}
-                  className="absolute -left-3 top-8 z-50 w-6 h-12 bg-indigo-600 rounded-r-xl flex items-center justify-center hover:bg-indigo-500 shadow-lg transition-all group"
-                  title="Expand Sidebar"
-                >
-                  <i className="fas fa-chevron-right text-xs text-white group-hover:scale-110 transition-transform"></i>
-                </button>
-              )}
+
+
               {currentStageData.output ? (
                 <div className="animate-in fade-in slide-in-from-bottom-2 duration-1000">
                   {/* Analysis Briefing Header */}
@@ -2744,6 +2746,8 @@ When using Google Search:
                     <p className="max-w-md text-slate-400 leading-relaxed text-[13px] font-medium opacity-60 px-6">
                       System standing by. Provide strategic context in the left panel to initialize the <span className="text-indigo-400 font-bold">{config.title}</span> processing engine.
                     </p>
+
+
 
                     <div className="mt-12 flex gap-10 items-center opacity-30">
                       <div className="flex flex-col items-center gap-1">
