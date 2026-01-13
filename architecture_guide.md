@@ -59,23 +59,95 @@ The application implements a **Dual-Engine Hybrid Architecture**, allowing users
 
 ### The Dispatcher Pattern
 The Frontend Controller (`App.tsx`) acts as a central **Model Dispatcher**. When a user initiates an action:
-1.  **State Check**: The system checks the `selectedModel` state (Default: `gemini-2.5-pro`).
+1.  **State Check**: The system checks the `selectedModel` state (Default: `gemini-1.5-pro`).
 2.  **Route Selection**:
     - If `groq-*` is selected -> Routes to `groqService.ts`.
     - If `gemini-*` is selected -> Routes to `geminiService.ts`.
 3.  **Multimodal Handling**: If images/PDFs are present, the system *automatically* favors `geminiService` unless explicitly overridden, as it handles native multimodal tokens.
 
+### Master System Architecture
+
 ```mermaid
-graph TB
-    subgraph "Presentation Layer"
-    GROQ --> SEARCH
-    GEMINI --> SEARCH
-    
-    GROQ --> G_CLOUD
-    VOICE --> G_CLOUD
-    GEMINI --> M_CLOUD
-    LIVE --> M_CLOUD
-    SEARCH --> S_CLOUD
+graph TD
+    %% Subgraph Styling
+    classDef frontend fill:#1e293b,stroke:#a5b4fc,stroke-width:2px,color:#fff
+    classDef service fill:#0f172a,stroke:#38bdf8,stroke-width:1px,color:#e2e8f0
+    classDef cloud fill:#312e81,stroke:#6366f1,stroke-width:2px,color:#fff,stroke-dasharray: 5 5
+    classDef db fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#fff
+    classDef config fill:#78350f,stroke:#f59e0b,stroke-width:2px,color:#fff
+
+    subgraph Client ["Frontend (React/Vite)"]
+        direction TB
+        UI[App.tsx / Sidebar / Workbench]:::frontend
+        Store[AppState Context]:::frontend
+        Config[constants.tsx\n(Stage Definitions & System Prompts)]:::config
+        
+        subgraph Services ["Service Layer"]
+            GS[geminiService.ts\n(Multimodal & Reasoning)]:::service
+            GrS[groqService.ts\n(Text & Orchestration)]:::service
+            LS[liveService.ts\n(Real-time Voice)]:::service
+            GVS[groqVoiceService.ts\n(Hybrid STT)]:::service
+            PS[projectService.ts\n(DB Persistence)]:::service
+            JS[jiraService.ts\n(Jira Sync)]:::service
+            SS[searchService.ts\n(RAG / Grounding)]:::service
+        end
+    end
+
+    subgraph Cloud ["External Cloud Infrastructure"]
+        subgraph Google ["Google Cloud AI"]
+            GenAI[Gemini 2.0 Flash/Pro API]:::cloud
+            LiveAPI[Gemini Live WebSocket]:::cloud
+        end
+        
+        subgraph GroqCloud ["Groq Cloud"]
+            Llama[Llama 3 (Inference)]:::cloud
+            Whisper[Whisper V3 Turbo (STT)]:::cloud
+        end
+        
+        Serper[Google Serper API]:::cloud
+        JiraCloud[Atlassian Cloud]:::cloud
+        
+        subgraph Firebase ["Firebase Backend"]
+            Firestore[(Firestore DB)]:::db
+            Rules[Security Rules\n(allow read, write: if request.auth != null)]:::db
+        end
+    end
+
+    %% Configuration Injection
+    Config -.->|Injects Prompts| GS
+    Config -.->|Injects Prompts| GrS
+    Config -.->|Defines UI Layout| UI
+
+    %% User Interaction Flows
+    UI -->|Text Action| GrS
+    UI -->|Multimodal Action| GS
+    UI -->|Live Mode Toggle| LS
+    UI -->|Mic Button| GVS
+    UI -->|Save Project| PS
+    UI -->|Export Epics| JS
+
+    %% Service Execution
+    GrS -->|Generate Text| Llama
+    GS -->|Generate Content| GenAI
+    LS <==>|Bi-directional Audio| LiveAPI
+
+    %% Search / RAG Loop
+    GrS -->|Tool Call| SS
+    GS -->|Smart Extraction| SS
+    SS -->|Search Query| Serper
+    Serper --o|JSON Results| SS
+
+    %% Hybrid STT Failover (The "Self-Healing" Path)
+    GVS --o|1. Primary STT| GenAI
+    GenAI -.->|Error / 403 / Timeout| GVS
+    GVS -->|2. Failover STT| Whisper
+
+    %% Data Persistence
+    PS -->|User Data JSON| Firestore
+    Firestore -.->|Validates| Rules
+
+    %% Integration
+    JS -->|Create Issues| JiraCloud
 ```
 
 ---
