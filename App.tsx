@@ -1287,6 +1287,12 @@ When using Google Search:
             versions: [],
             coherenceScore: 0
           }
+        },
+        settings: {
+          ...prev.settings,
+          thinkingTemperature: 0.7,
+          isThinkingEnabled: false,
+          isSearchEnabled: false
         }
       }));
 
