@@ -23,7 +23,8 @@ export async function callGeminiAgent(
   isThinking: boolean = false,
   useSearch: boolean = false,
   modelOverride?: string, // Optional override for manual selection
-  tools?: any[] // Support generic tools
+  tools?: any[], // Support generic tools
+  temperature?: number // Optional temperature override
 ): Promise<GeminiAgentResponse> {
   const hasMultimodal = contextFiles.some(f => f.mimeType.startsWith('image/') || f.mimeType.startsWith('video/') || f.mimeType === 'application/pdf');
 
@@ -92,7 +93,7 @@ export async function callGeminiAgent(
   try {
     const config: any = {
       systemInstruction: systemInstruction,
-      temperature: isThinking ? 0.7 : 0.4,
+      temperature: temperature !== undefined ? temperature : (isThinking ? 0.7 : 0.4),
       topP: 0.95,
     };
 

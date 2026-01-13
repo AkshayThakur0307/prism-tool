@@ -42,6 +42,7 @@ const INITIAL_STATE: AppState = {
   projectMetadata: INITIAL_METADATA,
   settings: {
     isThinkingEnabled: false,
+    thinkingTemperature: 0.7,
     isSearchEnabled: false,
   },
   stages: {
@@ -757,7 +758,8 @@ When using Google Search:
           finalUserPrompt,
           allFiles,
           state.settings.isThinkingEnabled,
-          state.settings.isSearchEnabled
+          state.settings.isSearchEnabled,
+          state.settings.thinkingTemperature // Pass configured temperature
         );
 
         // Normalize response
@@ -776,7 +778,9 @@ When using Google Search:
           allFiles,
           state.settings.isThinkingEnabled,
           state.settings.isSearchEnabled,
-          selectedModel // Pass the specific override
+          selectedModel, // Pass the specific override
+          undefined,    // tools
+          state.settings.thinkingTemperature // Pass configured temperature
         );
       }
 
@@ -1950,6 +1954,32 @@ When using Google Search:
                         {!canUseAdvancedAI && <i className="fas fa-lock text-amber-500 text-xs absolute -left-5"></i>}
                       </label>
                     </div>
+
+                    {/* Temperature Slider - Appears when Thinking Mode is enabled */}
+                    {state.settings.isThinkingEnabled && (
+                      <div className="mx-2 mt-2 p-3 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 animate-in slide-in-from-top-1 fade-in duration-300">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="text-[9px] font-black uppercase tracking-widest text-indigo-400">Creativity Level</div>
+                          <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{state.settings.thinkingTemperature?.toFixed(1) || '0.7'}</div>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.1"
+                          value={state.settings.thinkingTemperature || 0.7}
+                          onChange={(e) => setState(prev => ({
+                            ...prev,
+                            settings: { ...prev.settings, thinkingTemperature: parseFloat(e.target.value) }
+                          }))}
+                          className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                        />
+                        <div className="flex justify-between mt-1.5 text-[8px] font-bold uppercase tracking-wider text-slate-500">
+                          <span>Precise</span>
+                          <span>Creative</span>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="flex items-center justify-between p-3 rounded-2xl bg-amber-500/5 border border-amber-500/10 transition-all hover:bg-amber-500/10">
                       <div className="flex items-center gap-3">

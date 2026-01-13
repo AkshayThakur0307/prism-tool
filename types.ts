@@ -57,6 +57,7 @@ export interface StageData {
 
 export interface ProjectSettings {
   isThinkingEnabled: boolean;
+  thinkingTemperature?: number; // Optional 0.0 - 1.0
   isSearchEnabled: boolean;
 }
 

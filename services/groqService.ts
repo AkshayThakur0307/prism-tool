@@ -14,7 +14,8 @@ export async function callGroqAgent(
     userPrompt: string,
     contextFiles: FileContext[] = [],
     isThinking: boolean = false,
-    useSearch: boolean = false
+    useSearch: boolean = false,
+    temperature?: number
 ): Promise<GroqAgentResponse> {
 
     if (!process.env.GROQ_API_KEY) {
@@ -156,7 +157,7 @@ ${searchResults.text}
         const chatCompletion = await groq.chat.completions.create({
             messages: messages,
             model: selectedModel,
-            temperature: isThinking ? 0.7 : 0.5,
+            temperature: temperature !== undefined ? temperature : (isThinking ? 0.7 : 0.5),
             max_tokens: isThinking ? 4096 : 2048,
             top_p: 1,
             stop: null,
