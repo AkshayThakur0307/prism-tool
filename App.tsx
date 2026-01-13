@@ -43,6 +43,7 @@ const INITIAL_STATE: AppState = {
   settings: {
     isThinkingEnabled: false,
     thinkingTemperature: 0.7,
+    thinkingTopP: 0.95,
     isSearchEnabled: false,
   },
   stages: {
@@ -759,7 +760,8 @@ When using Google Search:
           allFiles,
           state.settings.isThinkingEnabled,
           state.settings.isSearchEnabled,
-          state.settings.thinkingTemperature // Pass configured temperature
+          state.settings.thinkingTemperature, // Pass configured temperature
+          state.settings.thinkingTopP // Pass configured TopP
         );
 
         // Normalize response
@@ -780,7 +782,8 @@ When using Google Search:
           state.settings.isSearchEnabled,
           selectedModel, // Pass the specific override
           undefined,    // tools
-          state.settings.thinkingTemperature // Pass configured temperature
+          state.settings.thinkingTemperature, // Pass configured temperature
+          state.settings.thinkingTopP // Pass configured TopP
         );
       }
 
@@ -1291,6 +1294,7 @@ When using Google Search:
         settings: {
           ...prev.settings,
           thinkingTemperature: 0.7,
+          thinkingTopP: 0.95,
           isThinkingEnabled: false,
           isSearchEnabled: false
         }
@@ -1980,7 +1984,16 @@ When using Google Search:
                     {state.settings.isThinkingEnabled && (
                       <div className="mx-2 mt-2 p-3 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 animate-in slide-in-from-top-1 fade-in duration-300">
                         <div className="flex items-center justify-between mb-2">
-                          <div className="text-[9px] font-black uppercase tracking-widest text-indigo-400">Creativity Level</div>
+                          <div className="flex items-center gap-1.5">
+                            <div className="text-[9px] font-black uppercase tracking-widest text-indigo-400">Creativity Level</div>
+                            <div className="group relative">
+                              <i className="fas fa-info-circle text-[9px] text-indigo-400/50 hover:text-indigo-400 cursor-help transition-colors"></i>
+                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
+                                <p className="text-[9px] text-slate-300 leading-relaxed font-medium">Controls randomness. Lower values are deterministic and focused; higher values are more creative and varied.</p>
+                                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-700"></div>
+                              </div>
+                            </div>
+                          </div>
                           <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{state.settings.thinkingTemperature?.toFixed(1) ?? '0.7'}</div>
                         </div>
                         <input
@@ -1998,6 +2011,41 @@ When using Google Search:
                         <div className="flex justify-between mt-1.5 text-[8px] font-bold uppercase tracking-wider text-slate-500">
                           <span>Precise</span>
                           <span>Creative</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* TopP Slider - Appears when Thinking Mode is enabled */}
+                    {state.settings.isThinkingEnabled && (
+                      <div className="mx-2 mt-2 p-3 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 animate-in slide-in-from-top-1 fade-in duration-300">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-1.5">
+                            <div className="text-[9px] font-black uppercase tracking-widest text-indigo-400">Diversity Level (Top P)</div>
+                            <div className="group relative">
+                              <i className="fas fa-info-circle text-[9px] text-indigo-400/50 hover:text-indigo-400 cursor-help transition-colors"></i>
+                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
+                                <p className="text-[9px] text-slate-300 leading-relaxed font-medium">Controls token selection diversity. Lower values limit to high-probability tokens; higher values allow more variety in word choice.</p>
+                                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-700"></div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{state.settings.thinkingTopP?.toFixed(2) ?? '0.95'}</div>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          value={state.settings.thinkingTopP ?? 0.95}
+                          onChange={(e) => setState(prev => ({
+                            ...prev,
+                            settings: { ...prev.settings, thinkingTopP: parseFloat(e.target.value) }
+                          }))}
+                          className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                        />
+                        <div className="flex justify-between mt-1.5 text-[8px] font-bold uppercase tracking-wider text-slate-500">
+                          <span>Focused</span>
+                          <span>Diverse</span>
                         </div>
                       </div>
                     )}

@@ -15,7 +15,8 @@ export async function callGroqAgent(
     contextFiles: FileContext[] = [],
     isThinking: boolean = false,
     useSearch: boolean = false,
-    temperature?: number
+    temperature?: number,
+    topP?: number
 ): Promise<GroqAgentResponse> {
 
     if (!process.env.GROQ_API_KEY) {
@@ -159,7 +160,7 @@ ${searchResults.text}
             model: selectedModel,
             temperature: temperature !== undefined ? temperature : (isThinking ? 0.7 : 0.5),
             max_tokens: isThinking ? 4096 : 2048,
-            top_p: 1,
+            top_p: topP !== undefined ? topP : 1,
             stop: null,
             stream: false,
         });
