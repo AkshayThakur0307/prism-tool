@@ -182,99 +182,101 @@ const AdminUserModal: React.FC<AdminUserModalProps> = ({ isOpen, onClose }) => {
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 overflow-y-auto p-6">
-                    {isLoading ? (
-                        <div className="text-center py-10 text-slate-500">
-                            <i className="fas fa-circle-notch fa-spin mr-2"></i> Loading users...
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="border-b border-slate-800 text-xs font-black text-slate-500 uppercase tracking-widest">
-                                        <th className="p-4">User</th>
-                                        <th className="p-4">Email</th>
-                                        <th className="p-4">Role</th>
-                                        <th className="p-4">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="text-sm">
-                                    {filteredUsers.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={4} className="p-8 text-center text-slate-500 italic">
-                                                No users found matching your criteria.
-                                            </td>
+                <div className="flex-1 overflow-y-auto">
+                    <div className="px-6 pb-6 pt-2">
+                        {isLoading ? (
+                            <div className="text-center py-10 text-slate-500">
+                                <i className="fas fa-circle-notch fa-spin mr-2"></i> Loading users...
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="border-b border-slate-800 text-xs font-black text-slate-500 uppercase tracking-widest">
+                                            <th className="p-4 sticky top-0 z-50 bg-slate-900 shadow-sm">User</th>
+                                            <th className="p-4 sticky top-0 z-50 bg-slate-900 shadow-sm">Email</th>
+                                            <th className="p-4 sticky top-0 z-50 bg-slate-900 shadow-sm">Role</th>
+                                            <th className="p-4 sticky top-0 z-50 bg-slate-900 shadow-sm">Actions</th>
                                         </tr>
-                                    ) : (
-                                        filteredUsers.map(user => {
-                                            const isCurrentUser = user.uid === currentUser?.uid;
-                                            return (
-                                                <tr key={user.uid} className={`border-b border-slate-800/50 transition-colors ${isCurrentUser ? 'bg-indigo-500/10 border-indigo-500/30' : 'hover:bg-slate-800/30'}`}>
+                                    </thead>
+                                    <tbody className="text-sm">
+                                        {filteredUsers.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={4} className="p-8 text-center text-slate-500 italic">
+                                                    No users found matching your criteria.
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            filteredUsers.map(user => {
+                                                const isCurrentUser = user.uid === currentUser?.uid;
+                                                return (
+                                                    <tr key={user.uid} className={`border-b border-slate-800/50 transition-colors ${isCurrentUser ? 'bg-indigo-500/10 border-indigo-500/30' : 'hover:bg-slate-800/30'}`}>
 
-                                                    <td className="p-4 text-white font-medium">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${isCurrentUser ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'bg-slate-800 text-slate-400'}`}>
-                                                                {user.displayName ? user.displayName.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase()}
-                                                            </div>
-                                                            <div>
-                                                                {user.displayName || 'No Name'}
-                                                                {isCurrentUser && (
-                                                                    <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wide bg-indigo-500 text-white">You</span>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td className="p-4 text-slate-400 font-mono text-xs">
-                                                        {user.email}
-                                                    </td>
-                                                    <td className="p-4">
-                                                        <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wider
-                                                    ${user.role === 'admin' ? 'bg-rose-500/10 text-rose-400' :
-                                                                user.role === 'pro' ? 'bg-amber-500/10 text-amber-400' :
-                                                                    'bg-blue-500/10 text-blue-400'}
-                                                `}>
-                                                            {user.role}
-                                                        </span>
-                                                    </td>
-                                                    <td className="p-4">
-                                                        {updatingUserId === user.uid ? (
-                                                            <span className="text-slate-500 text-xs"><i className="fas fa-spinner fa-spin"></i></span>
-                                                        ) : (
-                                                            isCurrentUser ? (
-                                                                <span className="text-[10px] text-slate-500 italic flex items-center gap-1.5 opacity-50 cursor-not-allowed">
-                                                                    <i className="fas fa-lock"></i> Locked
-                                                                </span>
-                                                            ) : (
-                                                                <div className="flex items-center gap-2">
-                                                                    <select
-                                                                        value={user.role}
-                                                                        onChange={(e) => handleRoleChangeRequest(user.uid, e.target.value as UserRole)}
-                                                                        className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300 outline-none focus:border-indigo-500"
-                                                                    >
-                                                                        <option value="viewer">Viewer</option>
-                                                                        <option value="standard">Standard</option>
-                                                                        <option value="pro">Pro</option>
-                                                                        <option value="admin">Admin</option>
-                                                                    </select>
-                                                                    <button
-                                                                        onClick={() => openDeleteModal(user.uid, user.email)}
-                                                                        className="w-6 h-6 rounded bg-slate-800 hover:bg-rose-900/50 hover:text-rose-400 text-slate-500 transition-colors flex items-center justify-center group/del"
-                                                                        title="Delete User"
-                                                                    >
-                                                                        <i className="fas fa-trash-alt text-[10px] group-hover/del:scale-110 transition-transform"></i>
-                                                                    </button>
+                                                        <td className="p-4 text-white font-medium">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${isCurrentUser ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'bg-slate-800 text-slate-400'}`}>
+                                                                    {user.displayName ? user.displayName.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase()}
                                                                 </div>
-                                                            )
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
+                                                                <div>
+                                                                    {user.displayName || 'No Name'}
+                                                                    {isCurrentUser && (
+                                                                        <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wide bg-indigo-500 text-white">You</span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="p-4 text-slate-400 font-mono text-xs">
+                                                            {user.email}
+                                                        </td>
+                                                        <td className="p-4">
+                                                            <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wider
+                                                    ${user.role === 'admin' ? 'bg-rose-500/10 text-rose-400' :
+                                                                    user.role === 'pro' ? 'bg-amber-500/10 text-amber-400' :
+                                                                        'bg-blue-500/10 text-blue-400'}
+                                                `}>
+                                                                {user.role}
+                                                            </span>
+                                                        </td>
+                                                        <td className="p-4">
+                                                            {updatingUserId === user.uid ? (
+                                                                <span className="text-slate-500 text-xs"><i className="fas fa-spinner fa-spin"></i></span>
+                                                            ) : (
+                                                                isCurrentUser ? (
+                                                                    <span className="text-[10px] text-slate-500 italic flex items-center gap-1.5 opacity-50 cursor-not-allowed">
+                                                                        <i className="fas fa-lock"></i> Locked
+                                                                    </span>
+                                                                ) : (
+                                                                    <div className="flex items-center gap-2">
+                                                                        <select
+                                                                            value={user.role}
+                                                                            onChange={(e) => handleRoleChangeRequest(user.uid, e.target.value as UserRole)}
+                                                                            className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300 outline-none focus:border-indigo-500"
+                                                                        >
+                                                                            <option value="viewer">Viewer</option>
+                                                                            <option value="standard">Standard</option>
+                                                                            <option value="pro">Pro</option>
+                                                                            <option value="admin">Admin</option>
+                                                                        </select>
+                                                                        <button
+                                                                            onClick={() => openDeleteModal(user.uid, user.email)}
+                                                                            className="w-6 h-6 rounded bg-slate-800 hover:bg-rose-900/50 hover:text-rose-400 text-slate-500 transition-colors flex items-center justify-center group/del"
+                                                                            title="Delete User"
+                                                                        >
+                                                                            <i className="fas fa-trash-alt text-[10px] group-hover/del:scale-110 transition-transform"></i>
+                                                                        </button>
+                                                                    </div>
+                                                                )
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 

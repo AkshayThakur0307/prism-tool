@@ -25,6 +25,7 @@ const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, on
     const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
     const [editingName, setEditingName] = useState('');
     const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
 
     useEffect(() => {
         if (isOpen && user) {
@@ -115,8 +116,11 @@ const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, on
     const [projectToShare, setProjectToShare] = useState<Project | null>(null);
 
     // Filter projects
-    const ownedProjects = projects.filter(p => p.userId === user?.uid);
-    const sharedProjects = projects.filter(p => p.userId !== user?.uid);
+    const filteredProjects = projects.filter(p =>
+        (p.name || p.projectMetadata?.companyName || '').toLowerCase().includes(searchQuery.toLowerCase())
+    );
+    const ownedProjects = filteredProjects.filter(p => p.userId === user?.uid);
+    const sharedProjects = filteredProjects.filter(p => p.userId !== user?.uid);
 
     // ... (Keep lifecycle loops)
 
@@ -155,10 +159,42 @@ const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, on
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-6 space-y-8">
 
+                    {/* Search Bar */}
+                    <div className="relative">
+                        <i className={`fas fa-search absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${searchQuery ? 'text-indigo-400' : 'text-slate-500'}`}></i>
+                        <input
+                            type="text"
+                            placeholder="Search projects..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className={`w-full bg-slate-950 border rounded-xl py-3 pl-12 pr-10 text-slate-300 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50 transition-all
+                                ${searchQuery ? 'border-indigo-500/30' : 'border-slate-800'}
+                            `}
+                        />
+                        {searchQuery && (
+                            <button
+                                onClick={() => setSearchQuery('')}
+                                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-400 transition-colors"
+                            >
+                                <i className="fas fa-times"></i>
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Search Feedback */}
+                    {searchQuery && (
+                        <div className="flex items-center gap-2 px-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                            <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></div>
+                            <p className="text-xs text-indigo-400 font-medium">Found {ownedProjects.length + sharedProjects.length} matches for "{searchQuery}"</p>
+                        </div>
+                    )}
+
                     {/* MY PROJECTS SECTION */}
                     <div className="space-y-4">
                         <div className="flex items-center justify-between">
-                            <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">My Projects</h3>
+                            <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">
+                                My Projects <span className="ml-2 text-indigo-500/50">({ownedProjects.length})</span>
+                            </h3>
                         </div>
 
                         {/* Create New Block */}
@@ -191,8 +227,18 @@ const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, on
                                 <i className="fas fa-circle-notch fa-spin mr-2"></i> Loading...
                             </div>
                         ) : ownedProjects.length === 0 ? (
-                            <div className="text-center py-8 text-slate-500 border-2 border-dashed border-slate-800 rounded-xl">
-                                <p>No owned projects found.</p>
+                            <div className="text-center py-12 text-slate-500 border border-dashed border-slate-800/50 rounded-xl bg-slate-900/20">
+                                {searchQuery ? (
+                                    <>
+                                        <i className="fas fa-search text-slate-700 text-2xl mb-3 block"></i>
+                                        <p className="text-sm">No matches found in your projects.</p>
+                                    </>
+                                ) : (
+                                    <>
+                                        <i className="fas fa-folder-open text-slate-700 text-2xl mb-3 block"></i>
+                                        <p className="text-sm">No owned projects yet.</p>
+                                    </>
+                                )}
                             </div>
                         ) : (
                             <div className="grid gap-3">
@@ -287,7 +333,7 @@ const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, on
                     {sharedProjects.length > 0 && (
                         <div className="space-y-4 pt-4 border-t border-slate-800/50">
                             <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                                <i className="fas fa-users mb-0.5"></i> Shared with Me
+                                <i className="fas fa-users mb-0.5"></i> Shared with Me <span className="ml-1 text-slate-600">({sharedProjects.length})</span>
                             </h3>
                             <div className="grid gap-3">
                                 {sharedProjects.map(project => (
