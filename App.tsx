@@ -741,6 +741,16 @@ When using Google Search:
 
       let result;
 
+      // Resolve AI Settings with defaults
+      const effectiveTemp = state.settings.thinkingTemperature ?? 0.7;
+      const effectiveTopP = state.settings.thinkingTopP ?? 0.95;
+
+      console.log("[App.tsx] runAnalysis resolved settings:", {
+        isThinking: state.settings.isThinkingEnabled,
+        temp: effectiveTemp,
+        topP: effectiveTopP
+      });
+
       // DISPATCHER LOGIC: Select Service based on Dropdown
       if (selectedModel.startsWith('groq-')) {
         console.log(`[Dispatcher] Routing to Groq Service (${selectedModel})...`);
@@ -760,8 +770,8 @@ When using Google Search:
           allFiles,
           state.settings.isThinkingEnabled,
           state.settings.isSearchEnabled,
-          state.settings.thinkingTemperature, // Pass configured temperature
-          state.settings.thinkingTopP // Pass configured TopP
+          effectiveTemp, // Pass configured temperature
+          effectiveTopP // Pass configured TopP
         );
 
         // Normalize response
@@ -782,8 +792,8 @@ When using Google Search:
           state.settings.isSearchEnabled,
           selectedModel, // Pass the specific override
           undefined,    // tools
-          state.settings.thinkingTemperature, // Pass configured temperature
-          state.settings.thinkingTopP // Pass configured TopP
+          effectiveTemp, // Pass configured temperature
+          effectiveTopP // Pass configured TopP
         );
       }
 

@@ -154,6 +154,8 @@ ${searchResults.text}
         messages.push({ role: "user", content: fullPrompt });
     }
 
+    console.log("[groqService] Receiving params:", { temperature, topP, isThinking });
+
     try {
         const chatCompletion = await groq.chat.completions.create({
             messages: messages,

@@ -91,6 +91,8 @@ export async function callGeminiAgent(
     modelToUse = getModelForCapability(GeminiCapability.VISION);
   }
 
+  console.log("[geminiService] Receiving params:", { temperature, topP, isThinking });
+
   try {
     const config: any = {
       systemInstruction: systemInstruction,
@@ -237,7 +239,9 @@ ${serperResults.text}
         userPrompt,
         contextFiles,
         isThinking, // Groq service handles mapping this to system prompt instructions
-        useSearch // Groq service handles Serper search internally
+        useSearch, // Groq service handles Serper search internally
+        temperature, // Pass original temperature
+        topP // Pass original topP
       );
     } catch (groqError: any) {
       console.error(`[Gemini] FATAL: Fallback to Groq also failed: ${groqError.message}`);
