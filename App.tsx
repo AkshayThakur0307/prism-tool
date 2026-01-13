@@ -1288,7 +1288,9 @@ When using Google Search:
             questions: [],
             answers: {},
             versions: [],
-            coherenceScore: 0
+            coherenceScore: 0,
+            thinkingTemperature: undefined,
+            thinkingTopP: undefined
           }
         },
         settings: {
@@ -1314,7 +1316,11 @@ When using Google Search:
             questions: [],
             answers: {},
             versions: [],
-            coherenceScore: 0
+            coherenceScore: 0,
+            // @ts-ignore
+            thinkingTemperature: null,
+            // @ts-ignore
+            thinkingTopP: null
           }
         );
       }
@@ -1364,7 +1370,15 @@ When using Google Search:
             <button
               key={stage}
               onClick={() => {
-                setState(p => ({ ...p, currentStage: stage }));
+                setState(p => ({
+                  ...p,
+                  currentStage: stage,
+                  settings: {
+                    ...p.settings,
+                    thinkingTemperature: p.stages[stage].thinkingTemperature ?? 0.7,
+                    thinkingTopP: p.stages[stage].thinkingTopP ?? 0.95
+                  }
+                }));
                 setIsMobileMenuOpen(false);
                 setShowHistory(false);
               }}
@@ -2002,10 +2016,20 @@ When using Google Search:
                           max="1"
                           step="0.1"
                           value={state.settings.thinkingTemperature ?? 0.7}
-                          onChange={(e) => setState(prev => ({
-                            ...prev,
-                            settings: { ...prev.settings, thinkingTemperature: parseFloat(e.target.value) }
-                          }))}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            setState(prev => ({
+                              ...prev,
+                              settings: { ...prev.settings, thinkingTemperature: val },
+                              stages: {
+                                ...prev.stages,
+                                [state.currentStage]: {
+                                  ...prev.stages[state.currentStage],
+                                  thinkingTemperature: val
+                                }
+                              }
+                            }));
+                          }}
                           className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
                         />
                         <div className="flex justify-between mt-1.5 text-[8px] font-bold uppercase tracking-wider text-slate-500">
@@ -2037,10 +2061,20 @@ When using Google Search:
                           max="1"
                           step="0.05"
                           value={state.settings.thinkingTopP ?? 0.95}
-                          onChange={(e) => setState(prev => ({
-                            ...prev,
-                            settings: { ...prev.settings, thinkingTopP: parseFloat(e.target.value) }
-                          }))}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            setState(prev => ({
+                              ...prev,
+                              settings: { ...prev.settings, thinkingTopP: val },
+                              stages: {
+                                ...prev.stages,
+                                [state.currentStage]: {
+                                  ...prev.stages[state.currentStage],
+                                  thinkingTopP: val
+                                }
+                              }
+                            }));
+                          }}
                           className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
                         />
                         <div className="flex justify-between mt-1.5 text-[8px] font-bold uppercase tracking-wider text-slate-500">
