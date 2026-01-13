@@ -75,7 +75,7 @@ const ModelSelector: React.FC<{ value: string; onChange: (val: string) => void; 
 
 const App: React.FC = () => {
   const { logout, user } = useAuth();
-  const { role, canUseAdvancedAI, canExportData, canUseRefinementStudio, canEditProject, isAdmin, canShareProject, canSyncJira, canUseEstimationStudio } = useRBAC();
+  const { role, canUseAdvancedAI, canExportData, canUseRefinementStudio, canEditProject, isAdmin, canShareProject, canSyncJira, canUseEstimationStudio, canManageStageIterations } = useRBAC();
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [state, setState] = useState<AppState>(INITIAL_STATE);
@@ -1499,10 +1499,11 @@ When using Google Search:
 
             <button
               onClick={resetCurrentStage}
-              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl btn-reset flex items-center justify-center shrink-0 group relative overflow-hidden shadow-lg active:shadow-inner`}
-              title="Reset Stage"
+              disabled={!canEditProject || !canManageStageIterations}
+              className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${(!canEditProject || !canManageStageIterations) ? 'text-slate-600 bg-slate-800 cursor-not-allowed opacity-50' : 'text-slate-400 hover:text-red-400 hover:bg-red-500/10'}`}
+              title={!canManageStageIterations ? "Reset Stage (Requires Pro/Admin)" : "Reset Stage"}
             >
-              <i className="fas fa-redo-alt text-xs sm:text-sm group-active:rotate-180 transition-transform duration-500"></i>
+              <i className={`fas ${!canManageStageIterations ? 'fa-lock' : 'fa-redo-alt'}`}></i>
             </button>
           </div>
         </header >
@@ -1596,9 +1597,11 @@ When using Google Search:
                         {!isCurrent && (
                           <button
                             onClick={() => revertToVersion(version)}
-                            className="w-full mt-2 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-[10px] font-black text-indigo-400 uppercase tracking-widest hover:bg-indigo-600 hover:text-white hover:border-indigo-400 transition-all flex items-center justify-center gap-2"
+                            disabled={!canEditProject || !canManageStageIterations}
+                            className={`w-full mt-2 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${(!canEditProject || !canManageStageIterations) ? 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-50' : 'bg-slate-800/80 border border-slate-700 text-indigo-400 hover:bg-indigo-600 hover:text-white hover:border-indigo-400'}`}
+                            title={!canManageStageIterations ? "Restore Version (Requires Pro/Admin)" : "Restore Version"}
                           >
-                            <i className="fas fa-undo-alt"></i> Restore Version
+                            <i className={`fas ${!canManageStageIterations ? 'fa-lock' : 'fa-undo-alt'}`}></i> Restore Version
                           </button>
                         )}
                       </div>
@@ -2221,6 +2224,7 @@ When using Google Search:
                             >
                               Cancel
                             </button>
+
                             <button
                               onClick={saveEdit}
                               className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-[10px] font-bold text-white uppercase tracking-wider transition-all shadow-lg shadow-emerald-600/20"

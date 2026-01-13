@@ -24,6 +24,7 @@ export const useRBAC = () => {
         canExportData: role === 'pro' || role === 'admin',
         canSyncJira: role === 'pro' || role === 'admin',
         canUseEstimationStudio: role === 'pro' || role === 'admin',
+        canManageStageIterations: role === 'pro' || role === 'admin', // Reset / Restore Versions
 
         // Refinement
         canUseRefinementStudio: role === 'pro' || role === 'admin',
