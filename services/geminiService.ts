@@ -27,7 +27,7 @@ export async function callGeminiAgent(
   temperature?: number, // Optional temperature override
   topP?: number // Optional topP override
 ): Promise<GeminiAgentResponse> {
-  const hasMultimodal = contextFiles.some(f => f.mimeType.startsWith('image/') || f.mimeType.startsWith('video/') || f.mimeType === 'application/pdf');
+  const hasMultimodal = contextFiles.some(f => f.mimeType.startsWith('image/') || f.mimeType.startsWith('video/') || f.mimeType.startsWith('audio/') || f.mimeType === 'application/pdf');
 
   // 1. Determine Model ID
   let modelToUse = modelOverride || getModelForCapability(capability);
@@ -71,6 +71,7 @@ export async function callGeminiAgent(
     const isFileMultimodal =
       file.mimeType.startsWith('image/') ||
       file.mimeType.startsWith('video/') ||
+      file.mimeType.startsWith('audio/') ||
       file.mimeType === 'application/pdf';
 
     if (isFileMultimodal) {

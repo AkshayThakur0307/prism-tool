@@ -167,19 +167,26 @@ export function createLiveAssistant(handlers: LiveHandlers, currentQuestions: st
       onopen: () => {
         isConnected = true;
         handlers.onStateChange({ isListening: true, isSpeaking: false });
-        navigator.mediaDevices.getUserMedia({ audio: true }).then(s => {
-          stream = s;
-          inputAudioContext = new AudioContext({ sampleRate: 16000 });
-          const source = inputAudioContext.createMediaStreamSource(s);
-          const processor = inputAudioContext.createScriptProcessor(4096, 1, 1);
-          processor.onaudioprocess = (e) => {
-            if (!isConnected) return;
-            const pcm = createPCMData(e.inputBuffer.getChannelData(0));
-            sessionPromise.then(session => safeSend(session, { media: pcm }));
-          };
-          source.connect(processor);
-          processor.connect(inputAudioContext.destination);
-        });
+        navigator.mediaDevices.getUserMedia({ audio: true })
+          .then(s => {
+            stream = s;
+            inputAudioContext = new AudioContext({ sampleRate: 16000 });
+            const source = inputAudioContext.createMediaStreamSource(s);
+            const processor = inputAudioContext.createScriptProcessor(4096, 1, 1);
+            processor.onaudioprocess = (e) => {
+              if (!isConnected) return;
+              const pcm = createPCMData(e.inputBuffer.getChannelData(0));
+              sessionPromise.then(session => safeSend(session, { media: pcm }));
+            };
+            source.connect(processor);
+            processor.connect(inputAudioContext.destination);
+          })
+          .catch(err => {
+            console.error("[LiveService] Microphone Access Denied or Failed:", err);
+            isConnected = false;
+            sessionPromise.then(s => s.close()); // Abort session
+            if (handlers.onError) handlers.onError(err);
+          });
       },
       onmessage: async (msg: LiveServerMessage) => {
         if (msg.serverContent?.inputTranscription) {

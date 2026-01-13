@@ -35,7 +35,7 @@ The platform distinguishes itself with **multimodal analysis** (processing text,
 ### AI & Intelligence
 - **Primary Logic Engine**: Groq SDK (running `openai/gpt-oss-120b`)
 - **Multimodal Engine**: Google GenAI SDK (`gemini-2.0-flash-exp` / `gemini-1.5-pro`)
-- **Voice Intelligence**: Groq Whisper (STT) + Gemini Live (Real-time Audio)
+- **Voice Intelligence**: Gemini 2.0 Flash (Primary STT) + Groq Whisper (Fallback STT) + Gemini Live (Real-time Audio)
 - **Web Research**:
     - **Scraping**: `api.allorigins.win` (CORS Proxy) + Mozilla Readability
     - **Search**: Google Serper API (Real-time Grounding)

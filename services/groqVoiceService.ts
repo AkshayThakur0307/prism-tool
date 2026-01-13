@@ -64,14 +64,49 @@ export class HybridVoiceAssistant {
         this.handlers.onStateChange({ isListening: false, isSpeaking: false }); // Show processing state if needed
 
         try {
-            // 1. Transcription using Whisper-Large-V3-Turbo (Groq is fastest for STT)
-            const file = new File([blob], 'audio.webm', { type: 'audio/webm' });
-            const transcription = await this.groq.audio.transcriptions.create({
-                file: file,
-                model: 'whisper-large-v3-turbo',
-            });
+            // 1. Transcription (Gemini Primary -> Groq Whisper Fallback)
+            let userText = '';
 
-            const userText = transcription.text;
+            try {
+                console.log("[HybridVoice] Attempting Gemini Transcription...");
+                const base64Audio = await new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        const result = reader.result as string;
+                        // Remove data URL prefix if present e.g. "data:audio/webm;base64,"
+                        const base64 = result.split(',')[1];
+                        resolve(base64);
+                    };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+
+                const geminiTxResponse = await callGeminiAgent(
+                    GeminiCapability.CHAT, // Use Flash for speed
+                    "You are a precise speech-to-text transcriber.",
+                    "Transcribe the audio in the provided file exactly as spoken. Do not add any commentary, timestamps, or markdown formatting. Just the raw text.",
+                    [{ name: 'audio.webm', content: base64Audio, mimeType: 'audio/webm', size: blob.size }],
+                    false,
+                    false,
+                    'gemini-2.0-flash-exp' // Force fast model
+                );
+
+                userText = geminiTxResponse.text.trim();
+                console.log("[HybridVoice] Gemini Transcription Success:", userText);
+
+            } catch (geminiError) {
+                console.warn("[HybridVoice] Gemini Transcription Failed. Failing over to Groq Whisper...", geminiError);
+
+                // FALLBACK: Groq Whisper-Large-V3-Turbo
+                const file = new File([blob], 'audio.webm', { type: 'audio/webm' });
+                const transcription = await this.groq.audio.transcriptions.create({
+                    file: file,
+                    model: 'whisper-large-v3-turbo',
+                });
+                userText = transcription.text;
+                console.log("[HybridVoice] Groq Transcription Success:", userText);
+            }
+
             if (!userText.trim()) return;
 
             this.handlers.onTranscription(userText, 'user');
