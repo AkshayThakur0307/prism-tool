@@ -16,10 +16,11 @@ service cloud.firestore {
 
     // Projects Collection
     match /projects/{projectId} {
-      // READ: Owner OR in sharedWith list
+      // READ: Owner OR in sharedWith list OR Admin
       allow read: if request.auth != null && (
         (resource == null || resource.data.userId == request.auth.uid) || 
-        (resource.data.sharedWith != null && request.auth.uid in resource.data.sharedWith)
+        (resource.data.sharedWith != null && request.auth.uid in resource.data.sharedWith) ||
+        getUserRole() == 'admin'
       );
       
       // CREATE: Authenticated users with valid role
@@ -27,10 +28,10 @@ service cloud.firestore {
                     (getUserRole() in ['standard', 'pro', 'admin']) &&
                     request.resource.data.userId == request.auth.uid;
 
-      // UPDATE/DELETE: Owner only + Role Check (Shared users cannot update/delete)
+      // UPDATE/DELETE: Owner only OR Admin
       allow update, delete: if request.auth != null && 
                             (getUserRole() in ['standard', 'pro', 'admin']) &&
-                            resource.data.userId == request.auth.uid;
+                            (resource.data.userId == request.auth.uid || getUserRole() == 'admin');
     }
   }
 }

@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, deleteDoc, query, where } from 'firebase/firestore';
 import { db } from '../services/firebaseConfig';
 import { UserProfile, UserRole } from '../types';
 import { useRBAC } from '../src/hooks/useRBAC';
@@ -22,6 +22,18 @@ const AdminUserModal: React.FC<AdminUserModalProps> = ({ isOpen, onClose }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [roleFilter, setRoleFilter] = useState<'all' | UserRole>('all');
 
+    // Delete Modal State
+    const [userToDelete, setUserToDelete] = useState<{ uid: string, email: string } | null>(null);
+    const [deleteProjects, setDeleteProjects] = useState(false);
+    const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (successMessage) {
+            const timer = setTimeout(() => setSuccessMessage(null), 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [successMessage]);
+
     useEffect(() => {
         if (isOpen && isAdmin) {
             loadUsers();
@@ -39,9 +51,43 @@ const AdminUserModal: React.FC<AdminUserModalProps> = ({ isOpen, onClose }) => {
             setUsers(userList.sort((a, b) => b.createdAt - a.createdAt));
         } catch (error) {
             console.error("Error loading users:", error);
-            alert("Failed to load users. Ensure you have Admin permissions.");
+            // alert("Failed to load users. Ensure you have Admin permissions.");
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const openDeleteModal = (userId: string, userEmail: string) => {
+        setUserToDelete({ uid: userId, email: userEmail });
+        setDeleteProjects(false); // Default to false
+    };
+
+    const confirmDeleteUser = async () => {
+        if (!userToDelete) return;
+
+        setUpdatingUserId(userToDelete.uid);
+        try {
+            // 1. Conditionally Delete User's Projects
+            if (deleteProjects) {
+                const projectsQuery = query(collection(db, 'projects'), where('userId', '==', userToDelete.uid));
+                const projectsSnapshot = await getDocs(projectsQuery);
+
+                const deletePromises = projectsSnapshot.docs.map(doc => deleteDoc(doc.ref));
+                await Promise.all(deletePromises);
+            }
+
+            // 2. Delete User Profile
+            await deleteDoc(doc(db, 'users', userToDelete.uid));
+
+            // Update local state
+            setUsers(users.filter(u => u.uid !== userToDelete.uid));
+            setSuccessMessage(`User "${userToDelete.email}" successfully deleted.`);
+        } catch (error) {
+            console.error("Error deleting user data:", error);
+            alert("Failed to delete user data. Check console permissions.");
+        } finally {
+            setUpdatingUserId(null);
+            setUserToDelete(null);
         }
     };
 
@@ -193,16 +239,25 @@ const AdminUserModal: React.FC<AdminUserModalProps> = ({ isOpen, onClose }) => {
                                                                     <i className="fas fa-lock"></i> Locked
                                                                 </span>
                                                             ) : (
-                                                                <select
-                                                                    value={user.role}
-                                                                    onChange={(e) => handleRoleChange(user.uid, e.target.value as UserRole)}
-                                                                    className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300 outline-none focus:border-indigo-500"
-                                                                >
-                                                                    <option value="viewer">Viewer</option>
-                                                                    <option value="standard">Standard</option>
-                                                                    <option value="pro">Pro</option>
-                                                                    <option value="admin">Admin</option>
-                                                                </select>
+                                                                <div className="flex items-center gap-2">
+                                                                    <select
+                                                                        value={user.role}
+                                                                        onChange={(e) => handleRoleChange(user.uid, e.target.value as UserRole)}
+                                                                        className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300 outline-none focus:border-indigo-500"
+                                                                    >
+                                                                        <option value="viewer">Viewer</option>
+                                                                        <option value="standard">Standard</option>
+                                                                        <option value="pro">Pro</option>
+                                                                        <option value="admin">Admin</option>
+                                                                    </select>
+                                                                    <button
+                                                                        onClick={() => openDeleteModal(user.uid, user.email)}
+                                                                        className="w-6 h-6 rounded bg-slate-800 hover:bg-rose-900/50 hover:text-rose-400 text-slate-500 transition-colors flex items-center justify-center group/del"
+                                                                        title="Delete User"
+                                                                    >
+                                                                        <i className="fas fa-trash-alt text-[10px] group-hover/del:scale-110 transition-transform"></i>
+                                                                    </button>
+                                                                </div>
                                                             )
                                                         )}
                                                     </td>
@@ -216,6 +271,66 @@ const AdminUserModal: React.FC<AdminUserModalProps> = ({ isOpen, onClose }) => {
                     )}
                 </div>
             </div>
+
+            {/* DELETE CONFIRMATION MODAL */}
+            {userToDelete && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setUserToDelete(null)}>
+                    <div className="bg-slate-900 border border-red-500/30 w-full max-w-md rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                        <div className="p-6">
+                            <h3 className="text-lg font-bold text-white flex items-center gap-2 mb-2">
+                                <i className="fas fa-exclamation-triangle text-amber-500"></i>
+                                Delete User?
+                            </h3>
+                            <p className="text-sm text-slate-400 mb-6">
+                                You are about to delete <span className="text-white font-mono bg-slate-800 px-1.5 py-0.5 rounded">{userToDelete.email}</span>.
+                                This will remove their listener permissions and profile.
+                            </p>
+
+                            <label className="flex items-start gap-3 p-4 bg-red-500/5 border border-red-500/20 rounded-lg cursor-pointer hover:bg-red-500/10 transition-colors mb-6 group">
+                                <div className="relative flex items-center mt-0.5">
+                                    <input
+                                        type="checkbox"
+                                        checked={deleteProjects}
+                                        onChange={(e) => setDeleteProjects(e.target.checked)}
+                                        className="peer sr-only"
+                                    />
+                                    <div className="w-4 h-4 rounded border-2 border-slate-600 peer-checked:bg-red-500 peer-checked:border-red-500 transition-all"></div>
+                                    <i className="fas fa-check text-[10px] text-white absolute left-0.5 top-0.5 opacity-0 peer-checked:opacity-100 transition-opacity"></i>
+                                </div>
+                                <div className="flex-1">
+                                    <p className="text-sm font-bold text-slate-200 group-hover:text-white transition-colors">Also delete all projects?</p>
+                                    <p className="text-xs text-slate-500 mt-1">Permanently remove all project data owned by this user. This cannot be undone.</p>
+                                </div>
+                            </label>
+
+                            <div className="flex gap-3 justify-end">
+                                <button
+                                    onClick={() => setUserToDelete(null)}
+                                    className="px-4 py-2 rounded-lg text-sm font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={confirmDeleteUser}
+                                    disabled={!userToDelete}
+                                    className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-sm font-bold text-white shadow-lg shadow-red-600/20 transition-all flex items-center gap-2"
+                                >
+                                    <i className="fas fa-trash-alt"></i> Delete User
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* SUCCESS TOAST */}
+            {successMessage && (
+                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-emerald-500 text-white px-6 py-3 rounded-full shadow-2xl shadow-emerald-500/30 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300 z-[120]">
+                    <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
+                        <i className="fas fa-check text-xs"></i>
+                    </div>
+                    <span className="font-bold text-sm tracking-wide">{successMessage}</span>
+                </div>
+            )}
         </div>
     );
 };
