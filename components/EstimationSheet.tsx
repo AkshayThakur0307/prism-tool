@@ -4,6 +4,7 @@ import jspreadsheet from 'jspreadsheet-ce';
 import 'jspreadsheet-ce/dist/jspreadsheet.css';
 import 'jsuites/dist/jsuites.css';
 import { parseEpicsFromMarkdown, EpicRow } from '../services/excelService';
+import ConfirmationModal from './common/ConfirmationModal';
 
 interface EstimationSheetProps {
     initialMarkdown: string;
@@ -38,6 +39,7 @@ export const EstimationSheet: React.FC<EstimationSheetProps> = ({
 
     // Shared State for Calculations
     const [totalEstimationDays, setTotalEstimationDays] = useState(0);
+    const [showSyncConfirm, setShowSyncConfirm] = useState(false);
 
     useEffect(() => {
         if (initialMarkdown) {
@@ -222,16 +224,19 @@ export const EstimationSheet: React.FC<EstimationSheetProps> = ({
     };
 
     const handleSync = () => {
-        if (confirm("This will overwrite current estimates with fresh parsing from AI output. Continue?")) {
-            const data = parseEpicsFromMarkdown(initialMarkdown);
-            setParsedData(data);
-            const instance = Array.isArray(sheetInstance.current) ? sheetInstance.current[0] : sheetInstance.current;
-            if (instance && typeof instance.destroy === 'function') {
-                instance.destroy();
-                sheetInstance.current = null;
-            }
-            if (sheetRef.current) sheetRef.current.innerHTML = '';
+        setShowSyncConfirm(true);
+    };
+
+    const confirmSync = () => {
+        const data = parseEpicsFromMarkdown(initialMarkdown);
+        setParsedData(data);
+        const instance = Array.isArray(sheetInstance.current) ? sheetInstance.current[0] : sheetInstance.current;
+        if (instance && typeof instance.destroy === 'function') {
+            instance.destroy();
+            sheetInstance.current = null;
         }
+        if (sheetRef.current) sheetRef.current.innerHTML = '';
+        setShowSyncConfirm(false);
     };
 
     return (
@@ -351,6 +356,16 @@ export const EstimationSheet: React.FC<EstimationSheetProps> = ({
                 </div>
 
             </div>
+
+            <ConfirmationModal
+                isOpen={showSyncConfirm}
+                onClose={() => setShowSyncConfirm(false)}
+                onConfirm={confirmSync}
+                title="Sync AI Estimates"
+                message="This will overwrite your current estimates with fresh parsing from the AI output. Are you sure you want to continue?"
+                confirmLabel="Overwrite & Sync"
+                isDestructive={true}
+            />
         </div>
     );
 };

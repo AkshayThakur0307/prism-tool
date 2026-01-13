@@ -5,6 +5,7 @@ import { Project } from '../types';
 import { projectService } from '../services/projectService';
 import { useAuth } from '../src/contexts/AuthContext';
 import { useRBAC } from '../src/hooks/useRBAC';
+import ConfirmationModal from './common/ConfirmationModal';
 
 interface ProjectListModalProps {
     isOpen: boolean;
@@ -23,6 +24,7 @@ const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, on
     const [newProjectName, setNewProjectName] = useState('');
     const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
     const [editingName, setEditingName] = useState('');
+    const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
 
     useEffect(() => {
         if (isOpen && user) {
@@ -59,15 +61,20 @@ const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, on
         }
     };
 
-    const handleDelete = async (projectId: string, e: React.MouseEvent) => {
+    const handleDeleteClick = (projectId: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        if (!confirm("Are you sure you want to delete this project? This cannot be undone.")) return;
+        setProjectToDelete(projectId);
+    };
 
+    const confirmDelete = async () => {
+        if (!projectToDelete) return;
         try {
-            await projectService.deleteProject(projectId);
-            setProjects(projects.filter(p => p.id !== projectId));
+            await projectService.deleteProject(projectToDelete);
+            setProjects(projects.filter(p => p.id !== projectToDelete));
         } catch (e) {
             console.error("Failed to delete project", e);
+        } finally {
+            setProjectToDelete(null);
         }
     };
 
@@ -259,7 +266,7 @@ const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, on
                                             )}
                                             {canDeleteProject && (
                                                 <button
-                                                    onClick={(e) => handleDelete(project.id, e)}
+                                                    onClick={(e) => handleDeleteClick(project.id, e)}
                                                     className="p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
                                                     title="Delete Project"
                                                 >
@@ -329,6 +336,17 @@ const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, on
                     onClose={() => setProjectToShare(null)}
                 />
             )}
+
+            {/* Delete Confirmation Modal */}
+            <ConfirmationModal
+                isOpen={!!projectToDelete}
+                onClose={() => setProjectToDelete(null)}
+                onConfirm={confirmDelete}
+                title="Delete Project"
+                message="Are you sure you want to delete this project? This action cannot be undone."
+                confirmLabel="Delete Project"
+                isDestructive={true}
+            />
         </div>
     );
 };

@@ -22,6 +22,8 @@ import { useAuth } from './src/contexts/AuthContext';
 import { useRBAC } from './src/hooks/useRBAC';
 import AdminUserModal from './components/AdminUserModal';
 import { ShareProjectModal } from './components/ShareProjectModal';
+import ConfirmationModal from './components/common/ConfirmationModal';
+import Toast, { ToastType } from './components/common/Toast';
 import { EstimationSheet } from './components/EstimationSheet';
 
 const INITIAL_METADATA: ProjectMetadata = {
@@ -88,6 +90,21 @@ const App: React.FC = () => {
   const [showHistory, setShowHistory] = useState(false);
   const [showManual, setShowManual] = useState(false);
   const [urlInput, setUrlInput] = useState('');
+
+
+  // New UI States
+  const [toast, setToast] = useState<{ message: string, type: ToastType } | null>(null);
+  const [confirmation, setConfirmation] = useState<{
+    type: 'RESET' | 'RESTORE' | 'DISCARD_REFINEMENT' | 'DISCARD_EDIT' | 'CANCEL_EDIT';
+    payload?: any;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    isDestructive?: boolean;
+  } | null>(null);
+
+  // Audio Context for Visualization
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   // Project Management State
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
@@ -819,12 +836,14 @@ When using Google Search:
     setShowRefinementModal(true);
   };
 
-  const closeRefinementModal = () => {
-    if (window.confirm("Discard unsaved changes?")) {
-      setShowRefinementModal(false);
-      setPreviewOutput('');
-      setRefinementChatHistory([]);
-    }
+  const handleManualEditCancel = () => {
+    setConfirmation({
+      type: 'CANCEL_EDIT',
+      title: "Discard Edits",
+      message: "Are you sure you want to discard your manual edits?",
+      confirmLabel: "Discard",
+      isDestructive: true
+    });
   };
 
   const applyRefinement = () => {
@@ -916,25 +935,56 @@ When using Google Search:
     setTempOutput('');
   };
 
-  const revertToVersion = (version: StageVersion) => {
-    if (window.confirm("Restore this version? Your current output for this stage will be replaced.")) {
+  const revertToVersion = (version: any) => {
+    // Permission Check
+    if (!canManageStageIterations) {
+      setToast({ message: "You don't have permission to restore versions.", type: 'error' });
+      return;
+    }
+
+    setConfirmation({
+      type: 'RESTORE',
+      payload: version,
+      title: "Restore Version",
+      message: "Restore this version? Your current output for this stage will be replaced.",
+      confirmLabel: "Restore",
+      isDestructive: true
+    });
+  };
+
+  const performRevertVersion = async (version: any) => {
+    try {
       setState(prev => ({
         ...prev,
         stages: {
           ...prev.stages,
-          [prev.currentStage]: {
-            ...prev.stages[prev.currentStage],
+          [state.currentStage]: {
+            ...prev.stages[state.currentStage],
             output: version.output,
-            input: version.input,
-            questions: version.questions,
-            coherenceScore: version.coherenceScore,
-            searchEntryPointHtml: version.searchEntryPointHtml,
-            status: 'completed'
+            input: version.input, // Restore input as well
+            questions: version.questions, // Restore questions
+            coherenceScore: version.coherenceScore, // Restore coherence score
+            searchEntryPointHtml: version.searchEntryPointHtml, // Restore search entry point
+            status: 'completed' // Mark as completed
           }
         }
       }));
       setShowHistory(false);
+      setToast({ message: "Version restored successfully.", type: 'success' });
+    } catch (err) {
+      console.error("Revert failed", err);
+      setToast({ message: "Failed to restore version.", type: 'error' });
     }
+  };
+
+  const closeRefinementModal = () => {
+    setConfirmation({
+      type: 'DISCARD_REFINEMENT',
+      title: "Discard Changes",
+      message: "Discard unsaved changes from this refinement session?",
+      confirmLabel: "Discard",
+      isDestructive: true
+    });
   };
 
   const handleJiraSync = async () => {
@@ -1164,35 +1214,77 @@ When using Google Search:
     return blocks.filter(b => !b.toUpperCase().includes('CLARIFICATION QUESTIONS')).map(b => b.trim()).filter(b => b.length > 0);
   }, [currentStageData.output]);
 
-  const resetCurrentStage = (e: React.MouseEvent) => {
-    e.preventDefault();
-    const stageToReset = state.currentStage;
+  // --- Consolidated Confirmation Handler ---
+  const handleConfirmAction = () => {
+    if (!confirmation) return;
 
-    if (window.confirm("Are you sure you want to reset this module? All inputs and generated output for this stage will be permanently cleared.")) {
-      if (analyzingStage === stageToReset) {
-        setAnalyzingStage(null);
-      }
-      setIsPresenting(false);
+    switch (confirmation.type) {
+      case 'RESET':
+        performResetStage();
+        break;
+      case 'RESTORE':
+        if (confirmation.payload) performRevertVersion(confirmation.payload);
+        break;
+      case 'DISCARD_REFINEMENT':
+        setShowRefinementModal(false);
+        setPreviewOutput('');
+        setRefinementChatHistory([]);
+        break;
+      case 'DISCARD_EDIT': // Assuming this exists or will exist
+      case 'CANCEL_EDIT':
+        setIsEditingOutput(false);
+        setTempOutput('');
+        break;
+    }
+    setConfirmation(null);
+  };
+
+  const resetCurrentStage = async () => {
+    // Permission Check
+    if (!canManageStageIterations) {
+      setToast({ message: "You don't have permission to reset stages.", type: 'error' });
+      return;
+    }
+
+    setConfirmation({
+      type: 'RESET',
+      title: "Reset Module",
+      message: "Are you sure you want to reset this module? All inputs and generated output for this stage will be permanently cleared.",
+      confirmLabel: "Reset Module",
+      isDestructive: true
+    });
+  };
+
+  const performResetStage = async () => {
+    try {
+      // 1. Clear State locally
       setState(prev => ({
         ...prev,
         stages: {
           ...prev.stages,
-          [stageToReset]: {
+          [state.currentStage]: {
+            ...prev.stages[state.currentStage],
             input: '',
             output: '',
-            files: [],
-            urls: [],
-            formatReference: undefined,
-            status: 'pending',
             questions: [],
-            answers: {},
-            groundingSources: undefined,
-            searchEntryPointHtml: undefined,
-            versions: [],
-            coherenceScore: 0
+            versions: []
           }
         }
       }));
+
+      // 2. Clear in Firestore
+      if (state.currentProject?.id) {
+        await projectService.saveProjectStage(
+          state.currentProject.id,
+          state.currentStage,
+          { input: '', output: '', questions: [], versions: [] }
+        );
+      }
+
+      setToast({ message: "Module successfully reset.", type: 'success' });
+    } catch (error) {
+      console.error("Reset failed", error);
+      setToast({ message: "Failed to reset module.", type: 'error' });
     }
   };
 
@@ -2833,6 +2925,24 @@ When using Google Search:
         </div>
       )}
 
+      {/* GLOBAL MODALS */}
+      <ConfirmationModal
+        isOpen={!!confirmation}
+        onClose={() => setConfirmation(null)}
+        onConfirm={handleConfirmAction}
+        title={confirmation?.title || ''}
+        message={confirmation?.message || ''}
+        confirmLabel={confirmation?.confirmLabel}
+        isDestructive={confirmation?.isDestructive}
+      />
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div >
   );
 };

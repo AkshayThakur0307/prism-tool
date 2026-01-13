@@ -164,5 +164,16 @@ export const projectService = {
     // Delete a project
     deleteProject: async (projectId: string): Promise<void> => {
         await deleteDoc(doc(db, PROJECTS_COLLECTION, projectId));
+    },
+
+    // Save a specific stage (Optimized update)
+    saveProjectStage: async (projectId: string, stage: DiscoveryStage, stageData: any): Promise<void> => {
+        const docRef = doc(db, PROJECTS_COLLECTION, projectId);
+        await setDoc(docRef, {
+            stages: {
+                [stage]: stageData
+            },
+            updatedAt: Date.now()
+        }, { merge: true });
     }
 };

@@ -4,6 +4,7 @@ import { GeminiCapability } from '../services/modelConfig';
 import { AppState, DiscoveryStage } from '../types';
 import MarkdownRenderer from './MarkdownRenderer';
 import { STAGE_CONFIGS } from '../constants';
+import ConfirmationModal from './common/ConfirmationModal';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -23,6 +24,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ appState }) => {
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastStageRef = useRef<DiscoveryStage>(appState.currentStage);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -45,11 +47,14 @@ const ChatBot: React.FC<ChatBotProps> = ({ appState }) => {
   }, [appState.currentStage]);
 
   const handleReset = () => {
-    if (window.confirm("Clear chat history? This will reset our conversation context.")) {
-      setMessages([
-        { role: 'assistant', content: `Context cleared. I'm still tracking your work in **${STAGE_CONFIGS[appState.currentStage].title}**. How can I help you start fresh?` }
-      ]);
-    }
+    setShowClearConfirm(true);
+  };
+
+  const confirmClear = () => {
+    setMessages([
+      { role: 'assistant', content: `Context cleared. I'm still tracking your work in **${STAGE_CONFIGS[appState.currentStage].title}**. How can I help you start fresh?` }
+    ]);
+    setShowClearConfirm(false);
   };
 
   const handleSend = async () => {
@@ -224,6 +229,16 @@ ${userMessage}
           </p>
         </div>
       </div>
+
+      <ConfirmationModal
+        isOpen={showClearConfirm}
+        onClose={() => setShowClearConfirm(false)}
+        onConfirm={confirmClear}
+        title="Clear Chat History"
+        message="Are you sure you want to clear the chat history? This will reset our conversation context."
+        confirmLabel="Clear History"
+        isDestructive={true}
+      />
     </div>
   );
 };

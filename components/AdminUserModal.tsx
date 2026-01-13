@@ -6,6 +6,8 @@ import { UserProfile, UserRole } from '../types';
 import { useRBAC } from '../src/hooks/useRBAC';
 
 import { useAuth } from '../src/contexts/AuthContext';
+import ConfirmationModal from './common/ConfirmationModal';
+import Toast, { ToastType } from './common/Toast';
 
 interface AdminUserModalProps {
     isOpen: boolean;
@@ -25,14 +27,12 @@ const AdminUserModal: React.FC<AdminUserModalProps> = ({ isOpen, onClose }) => {
     // Delete Modal State
     const [userToDelete, setUserToDelete] = useState<{ uid: string, email: string } | null>(null);
     const [deleteProjects, setDeleteProjects] = useState(false);
-    const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-    useEffect(() => {
-        if (successMessage) {
-            const timer = setTimeout(() => setSuccessMessage(null), 3000);
-            return () => clearTimeout(timer);
-        }
-    }, [successMessage]);
+    // Toast State
+    const [toast, setToast] = useState<{ message: string, type: ToastType } | null>(null);
+
+    // Role Change Modal State
+    const [roleChangeTarget, setRoleChangeTarget] = useState<{ uid: string, newRole: UserRole } | null>(null);
 
     useEffect(() => {
         if (isOpen && isAdmin) {
@@ -81,32 +81,38 @@ const AdminUserModal: React.FC<AdminUserModalProps> = ({ isOpen, onClose }) => {
 
             // Update local state
             setUsers(users.filter(u => u.uid !== userToDelete.uid));
-            setSuccessMessage(`User "${userToDelete.email}" successfully deleted.`);
+            setToast({ message: `User "${userToDelete.email}" successfully deleted.`, type: 'success' });
         } catch (error) {
             console.error("Error deleting user data:", error);
-            alert("Failed to delete user data. Check console permissions.");
+            setToast({ message: "Failed to delete user data.", type: 'error' });
         } finally {
             setUpdatingUserId(null);
             setUserToDelete(null);
         }
     };
 
-    const handleRoleChange = async (userId: string, newRole: UserRole) => {
-        if (!confirm(`Are you sure you want to change this user's role to ${newRole}?`)) return;
+    const handleRoleChangeRequest = (userId: string, newRole: UserRole) => {
+        setRoleChangeTarget({ uid: userId, newRole });
+    };
 
-        setUpdatingUserId(userId);
+    const confirmRoleChange = async () => {
+        if (!roleChangeTarget) return;
+        const { uid, newRole } = roleChangeTarget;
+
+        setUpdatingUserId(uid);
         try {
-            const userRef = doc(db, 'users', userId);
+            const userRef = doc(db, 'users', uid);
             await updateDoc(userRef, { role: newRole });
 
             // Update local state
-            setUsers(users.map(u => u.uid === userId ? { ...u, role: newRole } : u));
-            alert(`User role updated to ${newRole}`);
+            setUsers(users.map(u => u.uid === uid ? { ...u, role: newRole } : u));
+            setToast({ message: `User role updated to ${newRole}`, type: 'success' });
         } catch (error) {
             console.error("Error updating user role:", error);
-            alert("Failed to update user role.");
+            setToast({ message: "Failed to update user role.", type: 'error' });
         } finally {
             setUpdatingUserId(null);
+            setRoleChangeTarget(null);
         }
     };
 
@@ -242,7 +248,7 @@ const AdminUserModal: React.FC<AdminUserModalProps> = ({ isOpen, onClose }) => {
                                                                 <div className="flex items-center gap-2">
                                                                     <select
                                                                         value={user.role}
-                                                                        onChange={(e) => handleRoleChange(user.uid, e.target.value as UserRole)}
+                                                                        onChange={(e) => handleRoleChangeRequest(user.uid, e.target.value as UserRole)}
                                                                         className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300 outline-none focus:border-indigo-500"
                                                                     >
                                                                         <option value="viewer">Viewer</option>
@@ -322,14 +328,24 @@ const AdminUserModal: React.FC<AdminUserModalProps> = ({ isOpen, onClose }) => {
                     </div>
                 </div>
             )}
-            {/* SUCCESS TOAST */}
-            {successMessage && (
-                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-emerald-500 text-white px-6 py-3 rounded-full shadow-2xl shadow-emerald-500/30 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300 z-[120]">
-                    <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
-                        <i className="fas fa-check text-xs"></i>
-                    </div>
-                    <span className="font-bold text-sm tracking-wide">{successMessage}</span>
-                </div>
+            {/* ROLE CHANGE CONFIRMATION */}
+            <ConfirmationModal
+                isOpen={!!roleChangeTarget}
+                onClose={() => setRoleChangeTarget(null)}
+                onConfirm={confirmRoleChange}
+                title="Change User Role"
+                message={`Are you sure you want to change this user's role to ${roleChangeTarget?.newRole}?`}
+                confirmLabel="Change Role"
+                isLoading={!!updatingUserId}
+            />
+
+            {/* TOAST NOTIFICATION */}
+            {toast && (
+                <Toast
+                    message={toast.message}
+                    type={toast.type}
+                    onClose={() => setToast(null)}
+                />
             )}
         </div>
     );
