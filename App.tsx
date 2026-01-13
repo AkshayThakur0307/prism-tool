@@ -1960,14 +1960,14 @@ When using Google Search:
                       <div className="mx-2 mt-2 p-3 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 animate-in slide-in-from-top-1 fade-in duration-300">
                         <div className="flex items-center justify-between mb-2">
                           <div className="text-[9px] font-black uppercase tracking-widest text-indigo-400">Creativity Level</div>
-                          <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{state.settings.thinkingTemperature?.toFixed(1) || '0.7'}</div>
+                          <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{state.settings.thinkingTemperature?.toFixed(1) ?? '0.7'}</div>
                         </div>
                         <input
                           type="range"
                           min="0"
                           max="1"
                           step="0.1"
-                          value={state.settings.thinkingTemperature || 0.7}
+                          value={state.settings.thinkingTemperature ?? 0.7}
                           onChange={(e) => setState(prev => ({
                             ...prev,
                             settings: { ...prev.settings, thinkingTemperature: parseFloat(e.target.value) }
