@@ -193,6 +193,27 @@ const ProductManual: React.FC<ProductManualProps> = ({ onClose }) => {
                   <div>
                     <h4 className="text-sm font-black text-white uppercase tracking-widest">Thinking Mode (LLM Reasoner)</h4>
                     <p className="text-xs text-slate-400 mt-2 leading-relaxed font-medium">Enables a dedicated 32,768-token "reasoning budget." The agent performs internal simulations, logical validation, and multi-step synthesis before generating the final report. Essential for BOD and KPI stages.</p>
+
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="p-3 rounded-xl bg-slate-950/50 border border-slate-800">
+                        <div className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-1">Creativity Level (Temperature)</div>
+                        <p className="text-[10px] text-slate-500">Controls randomness (0.0 - 1.0). Default: <span className="text-slate-300">0.7</span>. Lower values are deterministic; higher values add variety.</p>
+                      </div>
+                      <div className="p-3 rounded-xl bg-slate-950/50 border border-slate-800">
+                        <div className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-1">Diversity Level (Top P)</div>
+                        <p className="text-[10px] text-slate-500">Controls token selection (0.0 - 1.0). Default: <span className="text-slate-300">0.95</span>. Adjusts the breadth of word choice.</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 p-3 rounded-xl bg-amber-500/5 border border-amber-500/10">
+                      <div className="flex items-center gap-2 mb-1">
+                        <i className="fas fa-save text-[10px] text-amber-500"></i>
+                        <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">Smart Persistence</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 leading-relaxed">
+                        Your custom settings are automatically saved for each specific stage. Resetting a stage will clear these saved values and revert to system defaults.
+                      </p>
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-start gap-4 pt-4 border-t border-slate-800">
