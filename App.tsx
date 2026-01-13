@@ -95,7 +95,7 @@ const App: React.FC = () => {
   // New UI States
   const [toast, setToast] = useState<{ message: string, type: ToastType } | null>(null);
   const [confirmation, setConfirmation] = useState<{
-    type: 'RESET' | 'RESTORE' | 'DISCARD_REFINEMENT' | 'DISCARD_EDIT' | 'CANCEL_EDIT';
+    type: 'RESET' | 'RESTORE' | 'DISCARD_REFINEMENT' | 'DISCARD_EDIT' | 'CANCEL_EDIT' | 'JIRA_SYNC_SUCCESS';
     payload?: any;
     title: string;
     message: string;
@@ -1007,7 +1007,13 @@ When using Google Search:
         (msg) => setJiraSyncProgress(msg)
       );
 
-      alert("Success! Your backlog has been pushed to Jira.");
+      setConfirmation({
+        type: 'JIRA_SYNC_SUCCESS',
+        title: "Sync Complete",
+        message: "Success! Your backlog has been pushed to Jira.",
+        confirmLabel: "OK",
+        // No cancel label -> Single button mode
+      });
       setShowJiraSync(false);
     } catch (err: any) {
       console.error(err);
@@ -1234,6 +1240,9 @@ When using Google Search:
       case 'CANCEL_EDIT':
         setIsEditingOutput(false);
         setTempOutput('');
+        break;
+      case 'JIRA_SYNC_SUCCESS':
+        // Just close modal
         break;
     }
     setConfirmation(null);
