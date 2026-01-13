@@ -1742,9 +1742,24 @@ When using Google Search:
           )
         }
 
-        < div
-          ref={mainScrollRef}
-          className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_50%_-20%,#1e1b4b_0%,transparent_50%)] print:bg-white print:overflow-visible relative"
+        {/* Scroll Fade Helper */}
+        {(() => {
+          // Inline helper for scroll fade since we don't want to trigger re-renders
+          const handleScrollFade = (e: React.UIEvent<HTMLDivElement>) => {
+            const target = e.currentTarget;
+            target.classList.add('is-scrolling');
+            const timeoutId = (target as any)._scrollTimeout;
+            if (timeoutId) clearTimeout(timeoutId);
+            (target as any)._scrollTimeout = setTimeout(() => {
+              target.classList.remove('is-scrolling');
+            }, 800);
+          };
+          (window as any).handleScrollFade = handleScrollFade; // Expose to scope if needed, or just use inline closure below
+          return null;
+        })()}
+
+        <div
+          className="flex-1 overflow-hidden bg-[radial-gradient(circle_at_50%_-20%,#1e1b4b_0%,transparent_50%)] print:bg-white print:overflow-visible relative flex flex-col"
         >
           {/* VERSION HISTORY SIDE PANEL (Refined slide-over) */}
           < div
@@ -1837,10 +1852,21 @@ When using Google Search:
 
 
 
-          <div className="max-w-[1400px] mx-auto p-4 sm:p-5 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12 items-stretch min-h-full print:block relative z-30">
+          <div className="max-w-[1400px] mx-auto p-4 sm:p-5 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12 items-stretch h-full print:block relative z-30">
 
             {isSidebarOpen && (
-              <div className="lg:col-span-5 space-y-6 lg:space-y-8 flex flex-col print:hidden animate-in slide-in-from-left-4 duration-300">
+              <div
+                onScroll={(e) => {
+                  const target = e.currentTarget;
+                  target.classList.add('is-scrolling');
+                  const timeoutId = (target as any)._scrollTimeout;
+                  if (timeoutId) clearTimeout(timeoutId);
+                  (target as any)._scrollTimeout = setTimeout(() => {
+                    target.classList.remove('is-scrolling');
+                  }, 800);
+                }}
+                className="lg:col-span-5 space-y-6 lg:space-y-8 flex flex-col print:hidden animate-in slide-in-from-left-4 duration-300 h-full overflow-y-auto custom-scrollbar pr-2"
+              >
                 <div className="glass rounded-[2.5rem] p-6 sm:p-8 shadow-2xl border-slate-700/50">
                   <div className="flex items-center justify-between mb-6 gap-4">
                     <div className="flex items-center gap-2">
@@ -2308,7 +2334,19 @@ When using Google Search:
               </div>
             )}
 
-            <div className={`${isSidebarOpen ? 'lg:col-span-7' : 'lg:col-span-12'} flex flex-col gap-6 lg:gap-8 print:block relative transition-all duration-300`}>
+            <div
+              ref={mainScrollRef}
+              onScroll={(e) => {
+                const target = e.currentTarget;
+                target.classList.add('is-scrolling');
+                const timeoutId = (target as any)._scrollTimeout;
+                if (timeoutId) clearTimeout(timeoutId);
+                (target as any)._scrollTimeout = setTimeout(() => {
+                  target.classList.remove('is-scrolling');
+                }, 800);
+              }}
+              className={`${isSidebarOpen ? 'lg:col-span-7' : 'lg:col-span-12'} flex flex-col gap-6 lg:gap-8 print:block relative transition-all duration-300 h-full overflow-y-auto custom-scrollbar pr-2`}
+            >
               {!isSidebarOpen && (
                 <button
                   onClick={() => setIsSidebarOpen(true)}
@@ -2935,6 +2973,14 @@ When using Google Search:
         }
         .search-entry-container a { color: #fbbf24 !important; text-decoration: none !important; font-weight: 800 !important; }
         .search-entry-container span { color: #94a3b8 !important; }
+        
+        /* Custom Scrollbar - Auto-hiding */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: transparent; border-radius: 10px; transition: background 0.3s; }
+        
+        /* Show ONLY when scrolling (set via JS) */
+        .custom-scrollbar.is-scrolling::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.4); }
       `}</style>
       {/* Immersive Refinement Modal */}
       {
