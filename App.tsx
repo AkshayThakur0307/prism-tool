@@ -1279,8 +1279,13 @@ When using Google Search:
             ...prev.stages[state.currentStage],
             input: '',
             output: '',
+            files: [],
+            urls: [],
+            status: 'pending',
             questions: [],
-            versions: []
+            answers: {},
+            versions: [],
+            coherenceScore: 0
           }
         }
       }));
@@ -1290,7 +1295,17 @@ When using Google Search:
         await projectService.saveProjectStage(
           state.currentProject.id,
           state.currentStage,
-          { input: '', output: '', questions: [], versions: [] }
+          {
+            input: '',
+            output: '',
+            files: [],
+            urls: [],
+            status: 'pending',
+            questions: [],
+            answers: {},
+            versions: [],
+            coherenceScore: 0
+          }
         );
       }
 
