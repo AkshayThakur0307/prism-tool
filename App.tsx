@@ -75,7 +75,7 @@ const ModelSelector: React.FC<{ value: string; onChange: (val: string) => void; 
 
 const App: React.FC = () => {
   const { logout, user } = useAuth();
-  const { role, canUseAdvancedAI, canExportData, canUseRefinementStudio, canEditProject, isAdmin, canShareProject } = useRBAC();
+  const { role, canUseAdvancedAI, canExportData, canUseRefinementStudio, canEditProject, isAdmin, canShareProject, canSyncJira, canUseEstimationStudio } = useRBAC();
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [state, setState] = useState<AppState>(INITIAL_STATE);
@@ -2065,9 +2065,11 @@ When using Google Search:
                         {!showJiraSync ? (
                           <button
                             onClick={() => setShowJiraSync(true)}
-                            className="px-4 py-2 rounded-xl bg-[#0052CC] text-[10px] font-black text-white uppercase tracking-widest hover:bg-[#0747A6] transition-all flex items-center gap-2"
+                            disabled={!canSyncJira}
+                            title={!canSyncJira ? "Requires Pro or Admin Role" : "Connect & Sync"}
+                            className={`px-4 py-2 rounded-xl text-[10px] font-black text-white uppercase tracking-widest transition-all flex items-center gap-2 ${!canSyncJira ? 'bg-slate-700 cursor-not-allowed opacity-50' : 'bg-[#0052CC] hover:bg-[#0747A6]'}`}
                           >
-                            <i className="fas fa-plug"></i> Connect & Sync
+                            <i className={`fas ${!canSyncJira ? 'fa-lock' : 'fa-plug'}`}></i> Connect & Sync
                           </button>
                         ) : (
                           <button
@@ -2176,9 +2178,11 @@ When using Google Search:
                           )}
                           <button
                             onClick={() => setShowEstimationStudio(true)}
-                            className="px-4 py-2 rounded-xl bg-emerald-600 text-[10px] font-black text-white uppercase tracking-widest hover:bg-emerald-500 transition-all flex items-center gap-2 shadow-lg shadow-emerald-600/20"
+                            disabled={!canUseEstimationStudio}
+                            title={!canUseEstimationStudio ? "Requires Pro or Admin Role" : "Open Estimation Studio"}
+                            className={`px-4 py-2 rounded-xl text-[10px] font-black text-white uppercase tracking-widest transition-all flex items-center gap-2 shadow-lg ${!canUseEstimationStudio ? 'bg-slate-700 cursor-not-allowed opacity-50 shadow-none' : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/20'}`}
                           >
-                            <i className="fas fa-external-link-alt"></i> Open Studio
+                            <i className={`fas ${!canUseEstimationStudio ? 'fa-lock' : 'fa-external-link-alt'}`}></i> Open Studio
                           </button>
                         </div>
                       </div>
