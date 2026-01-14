@@ -113,6 +113,29 @@ const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, on
         }
     };
 
+    const handleClone = async (project: Project, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!user) return;
+
+        try {
+            // Optimistic update or just wait? Let's wait to be safe.
+            // Ideally should show a cloning spinner on the specific item or global loader
+            // For simplicity, just global loader or similar feedback? 
+            // The file uses 'isLoading' but that wipes the list. 
+            // Let's just do it quietly or with a toast? We don't have a toast system visible.
+            // Let's use a temporary state or just await.
+
+            const newlyClonedProject = await projectService.cloneProject(project.id, user.uid);
+
+            // Add to list and sort (descending desc)
+            const updatedList = [newlyClonedProject, ...projects].sort((a, b) => b.updatedAt - a.updatedAt);
+            setProjects(updatedList);
+
+        } catch (e) {
+            console.error("Failed to clone project", e);
+        }
+    };
+
     const [projectToShare, setProjectToShare] = useState<Project | null>(null);
 
     // Filter projects
@@ -301,6 +324,15 @@ const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, on
                                                 {!canShareProject && <i className="fas fa-lock text-[8px] text-amber-500 mr-1"></i>}
                                                 <i className="fas fa-share-alt"></i>
                                             </button>
+                                            {canCreateProject && (
+                                                <button
+                                                    onClick={(e) => handleClone(project, e)}
+                                                    className="p-2 text-slate-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
+                                                    title="Clone Project"
+                                                >
+                                                    <i className="fas fa-copy"></i>
+                                                </button>
+                                            )}
                                             {canEditProject && (
                                                 <button
                                                     onClick={(e) => startEditing(project, e)}

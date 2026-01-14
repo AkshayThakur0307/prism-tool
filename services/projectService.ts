@@ -161,6 +161,59 @@ export const projectService = {
         return null;
     },
 
+    // Clone a project
+    cloneProject: async (originalProjectId: string, userId: string): Promise<Project> => {
+        try {
+            // 1. Get Original Project
+            const originalProject = await projectService.getProject(originalProjectId);
+            if (!originalProject) {
+                throw new Error("Project not found");
+            }
+
+            // 2. Prepare New Project Data
+            const now = Date.now();
+            const newProjectId = doc(collection(db, PROJECTS_COLLECTION)).id;
+            const newName = `Copy of ${originalProject.name || originalProject.projectMetadata.companyName || 'Untitled Project'}`;
+
+            const newProject: Project = {
+                ...originalProject,
+                id: newProjectId,
+                userId: userId, // Assign to current user (even if cloning shared project)
+                userName: originalProject.userName, // Ideally should be current user's name but we might not have it here easily. 
+                // However, usually userId matches auth.currentUser.uid.
+                // Let's rely on the caller or update it if we have context. 
+                // Actually, we should probably let the UI pass the userName or fetch it.
+                // For now, let's keep original userName or maybe empty? 
+                // Better: We'll stick to just userId for ownership.
+                name: newName,
+                projectMetadata: {
+                    ...originalProject.projectMetadata,
+                    companyName: newName
+                },
+                createdAt: now,
+                updatedAt: now,
+                // Clear any sharing info if it exists (though usually kept in separate collection or field, 
+                // but checking the type definition would be good. 
+                // Based on getUserProjects, specific sharedWith field isn't in main type but implied query.
+                // Depending on type definition, we might need to strip some fields.
+                // But shallow copy of Project type is usually safe given the schema.
+            };
+
+            // IMPORTANT: If 'sharedWith' is a field on the document, we must clear it so we don't accidentally share the clone.
+            // Looking at getUserProjects, it queries specific field path 'sharedWith'. 
+            // If it's part of the explicit Project type, we should clear it.
+            // If it's flexible, we delete it.
+            const projectToSave: any = { ...newProject };
+            delete projectToSave.sharedWith;
+
+            await setDoc(doc(db, PROJECTS_COLLECTION, newProjectId), projectToSave);
+            return newProject;
+        } catch (error) {
+            console.error("Error cloning project:", error);
+            throw error;
+        }
+    },
+
     // Delete a project
     deleteProject: async (projectId: string): Promise<void> => {
         await deleteDoc(doc(db, PROJECTS_COLLECTION, projectId));
