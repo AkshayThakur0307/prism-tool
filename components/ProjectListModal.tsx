@@ -27,12 +27,14 @@ const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, on
     const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [visibleCount, setVisibleCount] = useState(3);
+    const [activeTab, setActiveTab] = useState<'my_projects' | 'shared_with_me'>('my_projects');
     const loadMoreRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (isOpen && user) {
             loadProjects();
             setVisibleCount(3); // Reset on open
+            setActiveTab('my_projects');
         }
     }, [isOpen, user]);
 
@@ -63,7 +65,7 @@ const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, on
         if (!user) return;
         setIsLoading(true);
         try {
-            const list = await projectService.getUserProjects(user.uid);
+            const list = await projectService.getUserProjects(user.uid, user.email);
             setProjects(list);
         } catch (e) {
             console.error("Failed to load projects", e);
@@ -237,9 +239,9 @@ const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, on
                         </div>
                     )}
 
-                    {/* Create New Block (Fixed) */}
-                    {canCreateProject && (
-                        <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-4 flex items-center gap-4">
+                    {/* Create New Block (Fixed - Only visible on My Projects Tab) */}
+                    {activeTab === 'my_projects' && canCreateProject && (
+                        <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-4 flex items-center gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
                             <div className="w-10 h-10 rounded-lg bg-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
                                 <i className="fas fa-plus"></i>
                             </div>
@@ -261,182 +263,213 @@ const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, on
                         </div>
                     )}
 
-                    {/* My Projects Header (Fixed) */}
-                    <div className="flex items-center justify-between pt-2">
-                        <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">
-                            My Projects <span className="ml-2 text-indigo-500/50">({ownedProjects.length})</span>
-                        </h3>
+                    {/* Tabs Header (Fixed) */}
+                    <div className="flex items-center gap-6 border-b border-slate-800 pt-2">
+                        <button
+                            onClick={() => setActiveTab('my_projects')}
+                            className={`pb-3 text-sm font-bold uppercase tracking-wider transition-all relative
+                                ${activeTab === 'my_projects' ? 'text-white' : 'text-slate-500 hover:text-slate-400'}
+                            `}
+                        >
+                            My Projects <span className={`ml-1 ${activeTab === 'my_projects' ? 'text-indigo-400' : 'text-slate-600'}`}>({ownedProjects.length})</span>
+                            {activeTab === 'my_projects' && (
+                                <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-500 rounded-t-full"></div>
+                            )}
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('shared_with_me')}
+                            className={`pb-3 text-sm font-bold uppercase tracking-wider transition-all relative
+                                ${activeTab === 'shared_with_me' ? 'text-white' : 'text-slate-500 hover:text-slate-400'}
+                            `}
+                        >
+                            Shared with Me <span className={`ml-1 ${activeTab === 'shared_with_me' ? 'text-emerald-400' : 'text-slate-600'}`}>({sharedProjects.length})</span>
+                            {activeTab === 'shared_with_me' && (
+                                <div className="absolute bottom-0 left-0 w-full h-0.5 bg-emerald-500 rounded-t-full"></div>
+                            )}
+                        </button>
                     </div>
                 </div>
 
                 {/* Scrollable Content */}
-                <div className="flex-1 overflow-y-auto px-6 pb-6 pt-2 space-y-6">
+                <div className="flex-1 overflow-y-auto px-6 pb-6 pt-4">
 
-                    {/* MY PROJECTS SECTION */}
-                    <div className="space-y-4">
-                        {/* Owned List */}
-                        {isLoading ? (
-                            <div className="text-center py-4 text-slate-500">
-                                <i className="fas fa-circle-notch fa-spin mr-2"></i> Loading...
-                            </div>
-                        ) : ownedProjects.length === 0 ? (
-                            <div className="text-center py-12 text-slate-500 border border-dashed border-slate-800/50 rounded-xl bg-slate-900/20">
-                                {searchQuery ? (
-                                    <>
-                                        <i className="fas fa-search text-slate-700 text-2xl mb-3 block"></i>
-                                        <p className="text-sm">No matches found.</p>
-                                    </>
-                                ) : (
-                                    <>
-                                        <i className="fas fa-folder-open text-slate-700 text-2xl mb-3 block"></i>
-                                        <p className="text-sm">No projects yet.</p>
-                                    </>
-                                )}
-                            </div>
-                        ) : (
-                            <div className="grid gap-3">
-                                {ownedProjects.slice(0, visibleCount).map(project => (
-                                    <div
-                                        key={project.id}
-                                        onClick={() => onSelectProject(project)}
-                                        className={`group p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between
-                                    ${activeProjectId === project.id
-                                                ? 'bg-slate-800 border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
-                                                : 'bg-slate-800/40 border-slate-700/50 hover:border-slate-600 hover:bg-slate-800/60'}
-                                `}
-                                    >
-                                        <div className="flex items-center gap-4">
-                                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0
-                                        ${activeProjectId === project.id ? 'bg-indigo-500 text-white' : 'bg-slate-700 text-slate-400 group-hover:bg-slate-600 group-hover:text-white'}
-                                    `}>
-                                                <i className="fas fa-cube"></i>
+                    {/* MY PROJECTS TAB */}
+                    {activeTab === 'my_projects' && (
+                        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            {isLoading ? (
+                                <div className="text-center py-4 text-slate-500">
+                                    <i className="fas fa-circle-notch fa-spin mr-2"></i> Loading...
+                                </div>
+                            ) : ownedProjects.length === 0 ? (
+                                <div className="text-center py-12 text-slate-500 border border-dashed border-slate-800/50 rounded-xl bg-slate-900/20">
+                                    {searchQuery ? (
+                                        <>
+                                            <i className="fas fa-search text-slate-700 text-2xl mb-3 block"></i>
+                                            <p className="text-sm">No matches found.</p>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <i className="fas fa-folder-open text-slate-700 text-2xl mb-3 block"></i>
+                                            <p className="text-sm">No projects yet.</p>
+                                        </>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="grid gap-3">
+                                    {ownedProjects.slice(0, visibleCount).map(project => (
+                                        <div
+                                            key={project.id}
+                                            onClick={() => onSelectProject(project)}
+                                            className={`group p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between
+                                        ${activeProjectId === project.id
+                                                    ? 'bg-slate-800 border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
+                                                    : 'bg-slate-800/40 border-slate-700/50 hover:border-slate-600 hover:bg-slate-800/60'}
+                                    `}
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0
+                                            ${activeProjectId === project.id ? 'bg-indigo-500 text-white' : 'bg-slate-700 text-slate-400 group-hover:bg-slate-600 group-hover:text-white'}
+                                        `}>
+                                                    <i className="fas fa-cube"></i>
+                                                </div>
+                                                <div>
+                                                    {editingProjectId === project.id ? (
+                                                        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                                                            <input
+                                                                type="text"
+                                                                value={editingName}
+                                                                onChange={(e) => setEditingName(e.target.value)}
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === 'Enter') saveRename();
+                                                                    if (e.key === 'Escape') setEditingProjectId(null);
+                                                                }}
+                                                                onBlur={saveRename}
+                                                                autoFocus
+                                                                className="bg-slate-950 border border-indigo-500/50 rounded px-2 py-1 text-sm text-white outline-none w-full min-w-[200px]"
+                                                            />
+                                                        </div>
+                                                    ) : (
+                                                        <h3 className={`font-medium ${activeProjectId === project.id ? 'text-white' : 'text-slate-200'}`}>
+                                                            {project.name || 'Untitled Project'}
+                                                        </h3>
+                                                    )}
+                                                    <p className="text-xs text-slate-500">
+                                                        Last updated: {new Date(project.updatedAt).toLocaleDateString()}
+                                                    </p>
+                                                </div>
                                             </div>
-                                            <div>
-                                                {editingProjectId === project.id ? (
-                                                    <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                                                        <input
-                                                            type="text"
-                                                            value={editingName}
-                                                            onChange={(e) => setEditingName(e.target.value)}
-                                                            onKeyDown={(e) => {
-                                                                if (e.key === 'Enter') saveRename();
-                                                                if (e.key === 'Escape') setEditingProjectId(null);
-                                                            }}
-                                                            onBlur={saveRename}
-                                                            autoFocus
-                                                            className="bg-slate-950 border border-indigo-500/50 rounded px-2 py-1 text-sm text-white outline-none w-full min-w-[200px]"
-                                                        />
-                                                    </div>
-                                                ) : (
-                                                    <h3 className={`font-medium ${activeProjectId === project.id ? 'text-white' : 'text-slate-200'}`}>
-                                                        {project.name || 'Untitled Project'}
-                                                    </h3>
+
+                                            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button
+                                                    onClick={(e) => {
+                                                        if (!canShareProject) return;
+                                                        handleShareClick(project, e);
+                                                    }}
+                                                    className={`p-2 rounded-lg transition-colors
+                                                        ${canShareProject
+                                                            ? 'text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10'
+                                                            : 'text-slate-600 bg-slate-800/30 cursor-not-allowed opacity-50'}
+                                                    `}
+                                                    title={canShareProject ? "Share Project" : "Upgrade to Pro to share"}
+                                                >
+                                                    {!canShareProject && <i className="fas fa-lock text-[8px] text-amber-500 mr-1"></i>}
+                                                    <i className="fas fa-share-alt"></i>
+                                                </button>
+                                                {canCreateProject && (
+                                                    <button
+                                                        onClick={(e) => handleClone(project, e)}
+                                                        className="p-2 text-slate-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
+                                                        title="Clone Project"
+                                                    >
+                                                        <i className="fas fa-copy"></i>
+                                                    </button>
                                                 )}
-                                                <p className="text-xs text-slate-500">
-                                                    Last updated: {new Date(project.updatedAt).toLocaleDateString()}
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button
-                                                onClick={(e) => {
-                                                    if (!canShareProject) return;
-                                                    handleShareClick(project, e);
-                                                }}
-                                                className={`p-2 rounded-lg transition-colors
-                                                    ${canShareProject
-                                                        ? 'text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10'
-                                                        : 'text-slate-600 bg-slate-800/30 cursor-not-allowed opacity-50'}
-                                                `}
-                                                title={canShareProject ? "Share Project" : "Upgrade to Pro to share"}
-                                            >
-                                                {!canShareProject && <i className="fas fa-lock text-[8px] text-amber-500 mr-1"></i>}
-                                                <i className="fas fa-share-alt"></i>
-                                            </button>
-                                            {canCreateProject && (
-                                                <button
-                                                    onClick={(e) => handleClone(project, e)}
-                                                    className="p-2 text-slate-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
-                                                    title="Clone Project"
-                                                >
-                                                    <i className="fas fa-copy"></i>
-                                                </button>
-                                            )}
-                                            {canEditProject && (
-                                                <button
-                                                    onClick={(e) => startEditing(project, e)}
-                                                    className="p-2 text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-colors"
-                                                    title="Rename Project"
-                                                >
-                                                    <i className="fas fa-pen"></i>
-                                                </button>
-                                            )}
-                                            {canDeleteProject && (
-                                                <button
-                                                    onClick={(e) => handleDeleteClick(project.id, e)}
-                                                    className="p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
-                                                    title="Delete Project"
-                                                >
-                                                    <i className="fas fa-trash-alt"></i>
-                                                </button>
-                                            )}
-                                            <div className="text-indigo-400">
-                                                <i className="fas fa-chevron-right"></i>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* SHARED WITH ME SECTION */}
-                    {sharedProjects.length > 0 && (
-                        <div className="space-y-4 pt-4 border-t border-slate-800/50">
-                            <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                                <i className="fas fa-users mb-0.5"></i> Shared with Me <span className="ml-1 text-slate-600">({sharedProjects.length})</span>
-                            </h3>
-                            <div className="grid gap-3">
-                                {sharedProjects.slice(0, Math.max(0, visibleCount - ownedProjects.length)).map(project => (
-                                    <div
-                                        key={project.id}
-                                        onClick={() => onSelectProject(project)}
-                                        className={`group p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between
-                                    ${activeProjectId === project.id
-                                                ? 'bg-slate-800 border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
-                                                : 'bg-slate-800/20 border-slate-700/30 hover:border-slate-600 hover:bg-slate-800/40'}
-                                `}
-                                    >
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center shrink-0 border border-slate-700">
-                                                <i className="fas fa-share text-slate-500"></i>
-                                            </div>
-                                            <div>
-                                                <h3 className={`font-medium ${activeProjectId === project.id ? 'text-white' : 'text-slate-300'}`}>
-                                                    {project.name || 'Untitled Project'}
-                                                </h3>
-                                                <div className="flex items-center gap-2 mt-1">
-                                                    <span className="text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-400 border border-slate-700">View Only</span>
-                                                    <span className="text-[10px] text-slate-500">
-                                                        Owner: <span className="text-slate-400 font-bold">{project.userName || 'Unknown'}</span>
-                                                    </span>
+                                                {canEditProject && (
+                                                    <button
+                                                        onClick={(e) => startEditing(project, e)}
+                                                        className="p-2 text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-colors"
+                                                        title="Rename Project"
+                                                    >
+                                                        <i className="fas fa-pen"></i>
+                                                    </button>
+                                                )}
+                                                {canDeleteProject && (
+                                                    <button
+                                                        onClick={(e) => handleDeleteClick(project.id, e)}
+                                                        className="p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+                                                        title="Delete Project"
+                                                    >
+                                                        <i className="fas fa-trash-alt"></i>
+                                                    </button>
+                                                )}
+                                                <div className="text-indigo-400">
+                                                    <i className="fas fa-chevron-right"></i>
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="text-slate-600 group-hover:text-indigo-400 transition-colors">
-                                            <i className="fas fa-chevron-right"></i>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     )}
 
-                    {/* Sentinel for Infinite Scroll */}
-                    {(ownedProjects.length + sharedProjects.length > visibleCount) && (
-                        <div ref={loadMoreRef} className="h-4 w-full" />
+                    {/* SHARED WITH ME TAB */}
+                    {activeTab === 'shared_with_me' && (
+                        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            {isLoading ? (
+                                <div className="text-center py-4 text-slate-500">
+                                    <i className="fas fa-circle-notch fa-spin mr-2"></i> Loading...
+                                </div>
+                            ) : sharedProjects.length === 0 ? (
+                                <div className="text-center py-12 text-slate-500 border border-dashed border-slate-800/50 rounded-xl bg-slate-900/20">
+                                    <i className="fas fa-users text-slate-700 text-2xl mb-3 block"></i>
+                                    <p className="text-sm">No projects shared with you yet.</p>
+                                </div>
+                            ) : (
+                                <div className="grid gap-3">
+                                    {sharedProjects.slice(0, visibleCount).map(project => (
+                                        <div
+                                            key={project.id}
+                                            onClick={() => onSelectProject(project)}
+                                            className={`group p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between
+                                        ${activeProjectId === project.id
+                                                    ? 'bg-slate-800 border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
+                                                    : 'bg-slate-800/20 border-slate-700/30 hover:border-slate-600 hover:bg-slate-800/40'}
+                                    `}
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center shrink-0 border border-slate-700">
+                                                    <i className="fas fa-share text-slate-500"></i>
+                                                </div>
+                                                <div>
+                                                    <h3 className={`font-medium ${activeProjectId === project.id ? 'text-white' : 'text-slate-300'}`}>
+                                                        {project.name || 'Untitled Project'}
+                                                    </h3>
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <span className="text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-400 border border-slate-700">View Only</span>
+                                                        <span className="text-[10px] text-slate-500">
+                                                            Owner: <span className="text-slate-400 font-bold">{project.userName || 'Unknown'}</span>
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="text-slate-600 group-hover:text-indigo-400 transition-colors">
+                                                <i className="fas fa-chevron-right"></i>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     )}
+
+                    {/* Sentinel for Infinite Scroll (Applies to active list) */}
+                    {(
+                        (activeTab === 'my_projects' && ownedProjects.length > visibleCount) ||
+                        (activeTab === 'shared_with_me' && sharedProjects.length > visibleCount)
+                    ) && (
+                            <div ref={loadMoreRef} className="h-4 w-full" />
+                        )}
                 </div>
 
                 {/* Share Modal */}

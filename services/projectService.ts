@@ -1,7 +1,7 @@
 import { db, functions } from './firebaseConfig';
 import { collection, doc, setDoc, getDocs, deleteDoc, query, where, orderBy, getDoc, FieldPath } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { Project, AppState, DiscoveryStage } from '../types';
+import { Project, AppState, DiscoveryStage, SharedUser } from '../types';
 import { STAGE_CONFIGS } from '../constants';
 
 const PROJECTS_COLLECTION = 'projects';
@@ -107,19 +107,55 @@ export const projectService = {
     },
 
     // Share a project
-    shareProject: async (projectId: string, email: string, role: string = 'viewer'): Promise<{ success: boolean; message?: string }> => {
+    shareProject: async (projectId: string, email: string, role: 'viewer' | 'editor' = 'viewer'): Promise<{ success: boolean; message?: string }> => {
         try {
-            const shareFn = httpsCallable(functions, 'shareProject');
-            const result = await shareFn({ projectId, email, role });
-            return result.data as { success: boolean; message?: string };
-        } catch (error) {
+            const projectRef = doc(db, PROJECTS_COLLECTION, projectId);
+            const projectDoc = await getDoc(projectRef);
+
+            if (!projectDoc.exists()) {
+                throw new Error("Project not found");
+            }
+
+            const currentData = projectDoc.data() as Project;
+            const now = Date.now();
+
+            // Check if already shared
+            if (currentData.sharedEmails?.includes(email)) {
+                return { success: false, message: "User already has access." };
+            }
+
+            // Prepare updates
+            // 1. Add to sharedWith array of objects (for UI display)
+            const newSharedUser = {
+                email,
+                role,
+                sharedAt: now,
+                sharedBy: 'owner' // We can improve this if we pass current user context
+            };
+
+            const updatedSharedWith = [...(currentData.sharedWith || []), newSharedUser];
+
+            // 2. Add to sharedEmails array (for Security Rules & Querying)
+            const updatedSharedEmails = [...(currentData.sharedEmails || []), email];
+
+            await setDoc(projectRef, {
+                sharedWith: updatedSharedWith,
+                sharedEmails: updatedSharedEmails,
+                updatedAt: now
+            }, { merge: true });
+
+            return { success: true };
+        } catch (error: any) {
             console.error("Error sharing project:", error);
-            throw error;
+            if (error.code === 'permission-denied') {
+                return { success: false, message: "You don't have permission to share this project." };
+            }
+            return { success: false, message: error.message || "Failed to share project." };
         }
     },
 
     // Get all projects for a user (Owned + Shared)
-    getUserProjects: async (userId: string): Promise<Project[]> => {
+    getUserProjects: async (userId: string, userEmail?: string | null): Promise<Project[]> => {
         try {
             // 1. Fetch Owned Projects
             const ownedQuery = query(
@@ -128,26 +164,26 @@ export const projectService = {
             );
             const ownedSnapshot = await getDocs(ownedQuery);
 
-            // 2. Fetch Shared Projects
-            // Note: FieldPath query requires manual sorting as index might differ
-            const sharedQuery = query(
-                collection(db, PROJECTS_COLLECTION),
-                where(new FieldPath('sharedWith', userId), '!=', null)
-            );
-            const sharedSnapshot = await getDocs(sharedQuery);
-
             const projectsMap = new Map<string, Project>();
 
             ownedSnapshot.forEach((doc) => {
                 projectsMap.set(doc.id, doc.data() as Project);
             });
 
-            sharedSnapshot.forEach((doc) => {
-                // Shared projects might overlap if user shares with themselves (blocked in backend but safe to dedupe)
-                if (!projectsMap.has(doc.id)) {
-                    projectsMap.set(doc.id, doc.data() as Project);
-                }
-            });
+            // 2. Fetch Shared Projects (if email is provided)
+            if (userEmail) {
+                const sharedQuery = query(
+                    collection(db, PROJECTS_COLLECTION),
+                    where("sharedEmails", "array-contains", userEmail)
+                );
+                const sharedSnapshot = await getDocs(sharedQuery);
+
+                sharedSnapshot.forEach((doc) => {
+                    if (!projectsMap.has(doc.id)) {
+                        projectsMap.set(doc.id, doc.data() as Project);
+                    }
+                });
+            }
 
             // Convert to array and sort by updatedAt
             return Array.from(projectsMap.values()).sort((a, b) => b.updatedAt - a.updatedAt);

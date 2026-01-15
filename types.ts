@@ -78,13 +78,16 @@ export interface Project extends AppState {
   name: string;
   createdAt: number;
   updatedAt: number;
-  sharedWith?: Record<string, {
-    email: string;
-    role: 'viewer';
-    sharedAt: number;
-    sharedBy: string;
-  }>;
+  sharedWith?: SharedUser[];
+  sharedEmails?: string[]; // Array of emails for Firestore security rules
   customInstructions?: Record<string, string>; // Stage-specific system instruction overrides
+}
+
+export interface SharedUser {
+  email: string;
+  role: 'viewer' | 'editor';
+  sharedAt: number;
+  sharedBy: string;
 }
 
 export interface VoiceState {

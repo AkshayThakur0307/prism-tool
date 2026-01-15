@@ -16,16 +16,16 @@ service cloud.firestore {
 
     // Projects Collection
     match /projects/{projectId} {
-      // READ: Owner OR in sharedWith list OR Admin
+      // READ: Owner OR in sharedEmails list OR Admin
       allow read: if request.auth != null && (
         (resource == null || resource.data.userId == request.auth.uid) || 
-        (resource.data.sharedWith != null && request.auth.uid in resource.data.sharedWith) ||
+        (resource.data.sharedEmails != null && request.auth.token.email in resource.data.sharedEmails) ||
         getUserRole() == 'admin'
       );
       
       // CREATE: Authenticated users with valid role
+      // CREATE: Authenticated users can create their own projects
       allow create: if request.auth != null && 
-                    (getUserRole() in ['standard', 'pro', 'admin']) &&
                     request.resource.data.userId == request.auth.uid;
 
       // UPDATE/DELETE: Owner only OR Admin
