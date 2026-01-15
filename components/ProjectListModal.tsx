@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ShareProjectModal } from './ShareProjectModal';
 import { Project } from '../types';
 import { projectService } from '../services/projectService';
@@ -26,12 +26,38 @@ const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, on
     const [editingName, setEditingName] = useState('');
     const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [visibleCount, setVisibleCount] = useState(3);
+    const loadMoreRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (isOpen && user) {
             loadProjects();
+            setVisibleCount(3); // Reset on open
         }
     }, [isOpen, user]);
+
+    useEffect(() => {
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0].isIntersecting) {
+                    setVisibleCount((prev) => prev + 5);
+                }
+            },
+            { threshold: 1.0 }
+        );
+
+        if (loadMoreRef.current) {
+            observer.observe(loadMoreRef.current);
+        }
+
+        return () => observer.disconnect();
+    }, [projects, searchQuery, visibleCount]);
+
+    // Reset visible count when search query changes
+    useEffect(() => {
+        if (searchQuery) setVisibleCount(100); // Show all/more matches when searching, or reset logic
+        else setVisibleCount(3);
+    }, [searchQuery]);
 
     const loadProjects = async () => {
         if (!user) return;
@@ -179,9 +205,8 @@ const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, on
                     </button>
                 </div>
 
-                {/* Content */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-8">
-
+                {/* Fixed Controls Section */}
+                <div className="p-6 pb-0 space-y-4 bg-slate-900 z-10 border-b border-transparent">
                     {/* Search Bar */}
                     <div className="relative">
                         <i className={`fas fa-search absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${searchQuery ? 'text-indigo-400' : 'text-slate-500'}`}></i>
@@ -212,38 +237,43 @@ const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, on
                         </div>
                     )}
 
+                    {/* Create New Block (Fixed) */}
+                    {canCreateProject && (
+                        <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-4 flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-lg bg-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
+                                <i className="fas fa-plus"></i>
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="Enter project name..."
+                                className="flex-1 bg-transparent border-none outline-none text-white placeholder-slate-500"
+                                value={newProjectName}
+                                onChange={(e) => setNewProjectName(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                            />
+                            <button
+                                onClick={handleCreate}
+                                disabled={isCreating}
+                                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                            >
+                                {isCreating ? '...' : 'Create'}
+                            </button>
+                        </div>
+                    )}
+
+                    {/* My Projects Header (Fixed) */}
+                    <div className="flex items-center justify-between pt-2">
+                        <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">
+                            My Projects <span className="ml-2 text-indigo-500/50">({ownedProjects.length})</span>
+                        </h3>
+                    </div>
+                </div>
+
+                {/* Scrollable Content */}
+                <div className="flex-1 overflow-y-auto px-6 pb-6 pt-2 space-y-6">
+
                     {/* MY PROJECTS SECTION */}
                     <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">
-                                My Projects <span className="ml-2 text-indigo-500/50">({ownedProjects.length})</span>
-                            </h3>
-                        </div>
-
-                        {/* Create New Block */}
-                        {canCreateProject && (
-                            <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-4 flex items-center gap-4">
-                                <div className="w-10 h-10 rounded-lg bg-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
-                                    <i className="fas fa-plus"></i>
-                                </div>
-                                <input
-                                    type="text"
-                                    placeholder="Enter project name (e.g. Acme Corp Discovery)..."
-                                    className="flex-1 bg-transparent border-none outline-none text-white placeholder-slate-500"
-                                    value={newProjectName}
-                                    onChange={(e) => setNewProjectName(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-                                />
-                                <button
-                                    onClick={handleCreate}
-                                    disabled={isCreating}
-                                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
-                                >
-                                    {isCreating ? 'Creating...' : 'Create New'}
-                                </button>
-                            </div>
-                        )}
-
                         {/* Owned List */}
                         {isLoading ? (
                             <div className="text-center py-4 text-slate-500">
@@ -254,18 +284,18 @@ const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, on
                                 {searchQuery ? (
                                     <>
                                         <i className="fas fa-search text-slate-700 text-2xl mb-3 block"></i>
-                                        <p className="text-sm">No matches found in your projects.</p>
+                                        <p className="text-sm">No matches found.</p>
                                     </>
                                 ) : (
                                     <>
                                         <i className="fas fa-folder-open text-slate-700 text-2xl mb-3 block"></i>
-                                        <p className="text-sm">No owned projects yet.</p>
+                                        <p className="text-sm">No projects yet.</p>
                                     </>
                                 )}
                             </div>
                         ) : (
                             <div className="grid gap-3">
-                                {ownedProjects.map(project => (
+                                {ownedProjects.slice(0, visibleCount).map(project => (
                                     <div
                                         key={project.id}
                                         onClick={() => onSelectProject(project)}
@@ -368,7 +398,7 @@ const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, on
                                 <i className="fas fa-users mb-0.5"></i> Shared with Me <span className="ml-1 text-slate-600">({sharedProjects.length})</span>
                             </h3>
                             <div className="grid gap-3">
-                                {sharedProjects.map(project => (
+                                {sharedProjects.slice(0, Math.max(0, visibleCount - ownedProjects.length)).map(project => (
                                     <div
                                         key={project.id}
                                         onClick={() => onSelectProject(project)}
@@ -402,29 +432,33 @@ const ProjectListModal: React.FC<ProjectListModalProps> = ({ isOpen, onClose, on
                             </div>
                         </div>
                     )}
+
+                    {/* Sentinel for Infinite Scroll */}
+                    {(ownedProjects.length + sharedProjects.length > visibleCount) && (
+                        <div ref={loadMoreRef} className="h-4 w-full" />
+                    )}
                 </div>
 
-            </div>
+                {/* Share Modal */}
+                {projectToShare && (
+                    <ShareProjectModal
+                        projectId={projectToShare.id}
+                        projectName={projectToShare.name || projectToShare.projectMetadata.companyName}
+                        onClose={() => setProjectToShare(null)}
+                    />
+                )}
 
-            {/* Share Modal */}
-            {projectToShare && (
-                <ShareProjectModal
-                    projectId={projectToShare.id}
-                    projectName={projectToShare.name || projectToShare.projectMetadata.companyName}
-                    onClose={() => setProjectToShare(null)}
+                {/* Delete Confirmation Modal */}
+                <ConfirmationModal
+                    isOpen={!!projectToDelete}
+                    onClose={() => setProjectToDelete(null)}
+                    onConfirm={confirmDelete}
+                    title="Delete Project"
+                    message="Are you sure you want to delete this project? This action cannot be undone."
+                    confirmLabel="Delete Project"
+                    isDestructive={true}
                 />
-            )}
-
-            {/* Delete Confirmation Modal */}
-            <ConfirmationModal
-                isOpen={!!projectToDelete}
-                onClose={() => setProjectToDelete(null)}
-                onConfirm={confirmDelete}
-                title="Delete Project"
-                message="Are you sure you want to delete this project? This action cannot be undone."
-                confirmLabel="Delete Project"
-                isDestructive={true}
-            />
+            </div>
         </div>
     );
 };
