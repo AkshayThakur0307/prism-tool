@@ -2521,7 +2521,7 @@ When using Google Search:
                                 type="text"
                                 placeholder="your-domain.atlassian.net"
                                 value={jiraConfig.domain}
-                                onChange={(e) => setJiraConfig({ ...jiraConfig, domain: e.target.value })}
+                                onChange={(e) => setJiraConfig({ ...jiraConfig, domain: e.target.value.trim() })}
                                 className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-4 py-2.5 text-[11px] text-white outline-none focus:border-indigo-500/50"
                               />
                             </div>
@@ -2531,7 +2531,7 @@ When using Google Search:
                                 type="email"
                                 placeholder="admin@company.com"
                                 value={jiraConfig.email}
-                                onChange={(e) => setJiraConfig({ ...jiraConfig, email: e.target.value })}
+                                onChange={(e) => setJiraConfig({ ...jiraConfig, email: e.target.value.trim() })}
                                 className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-4 py-2.5 text-[11px] text-white outline-none focus:border-indigo-500/50"
                               />
                             </div>
@@ -2541,7 +2541,7 @@ When using Google Search:
                                 type="password"
                                 placeholder="ATATT3xF..."
                                 value={jiraConfig.apiToken}
-                                onChange={(e) => setJiraConfig({ ...jiraConfig, apiToken: e.target.value })}
+                                onChange={(e) => setJiraConfig({ ...jiraConfig, apiToken: e.target.value.trim() })}
                                 className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-4 py-2.5 text-[11px] text-white outline-none focus:border-indigo-500/50"
                               />
                             </div>
@@ -2551,7 +2551,7 @@ When using Google Search:
                                 type="text"
                                 placeholder="PROJ"
                                 value={jiraConfig.projectKey}
-                                onChange={(e) => setJiraConfig({ ...jiraConfig, projectKey: e.target.value })}
+                                onChange={(e) => setJiraConfig({ ...jiraConfig, projectKey: e.target.value.trim() })}
                                 className="w-full bg-slate-950/60 border border-slate-800 rounded-xl px-4 py-2.5 text-[11px] text-white outline-none focus:border-indigo-500/50"
                               />
                             </div>

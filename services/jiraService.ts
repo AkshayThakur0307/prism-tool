@@ -77,7 +77,8 @@ export const jiraService = {
                 'Authorization': jiraService.getAuthHeader(config.email, config.apiToken),
                 'Accept': 'application/json',
                 'Content-Type': 'application/json',
-                'X-Atlassian-Token': 'no-check'
+                // 'X-Atlassian-Token': 'no-check', // Handled by Proxy
+                'X-Jira-Domain': config.domain // Dynamic Proxy Routing Header
             },
             body: JSON.stringify(body),
         });
@@ -102,7 +103,8 @@ export const jiraService = {
             method: 'GET',
             headers: {
                 'Authorization': jiraService.getAuthHeader(config.email, config.apiToken),
-                'Accept': 'application/json'
+                'Accept': 'application/json',
+                'X-Jira-Domain': config.domain
             }
         });
 
@@ -124,7 +126,8 @@ export const jiraService = {
             method: 'GET',
             headers: {
                 'Authorization': jiraService.getAuthHeader(config.email, config.apiToken),
-                'Accept': 'application/json'
+                'Accept': 'application/json',
+                'X-Jira-Domain': config.domain
             }
         });
 
@@ -149,7 +152,8 @@ export const jiraService = {
             headers: {
                 'Authorization': jiraService.getAuthHeader(config.email, config.apiToken),
                 'Accept': 'application/json',
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-Jira-Domain': config.domain
             },
             body: JSON.stringify(body)
         });
@@ -170,6 +174,7 @@ export const jiraService = {
             method: 'DELETE',
             headers: {
                 'Authorization': jiraService.getAuthHeader(config.email, config.apiToken),
+                'X-Jira-Domain': config.domain
             }
         });
 
@@ -189,7 +194,8 @@ export const jiraService = {
             method: 'GET',
             headers: {
                 'Authorization': jiraService.getAuthHeader(config.email, config.apiToken),
-                'Accept': 'application/json'
+                'Accept': 'application/json',
+                'X-Jira-Domain': config.domain
             }
         });
 
@@ -218,7 +224,8 @@ export const jiraService = {
             headers: {
                 'Authorization': jiraService.getAuthHeader(config.email, config.apiToken),
                 'Accept': 'application/json',
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-Jira-Domain': config.domain
             },
             body: JSON.stringify(body)
         });
