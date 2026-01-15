@@ -87,6 +87,15 @@ export const projectService = {
         }
     },
 
+    // Generic update for partial data
+    updateProject: async (projectId: string, data: Partial<Project>): Promise<void> => {
+        const docRef = doc(db, PROJECTS_COLLECTION, projectId);
+        await setDoc(docRef, {
+            ...data,
+            updatedAt: Date.now()
+        }, { merge: true });
+    },
+
     // Rename a project
     renameProject: async (projectId: string, newName: string): Promise<void> => {
         const docRef = doc(db, PROJECTS_COLLECTION, projectId);

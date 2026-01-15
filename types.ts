@@ -84,6 +84,7 @@ export interface Project extends AppState {
     sharedAt: number;
     sharedBy: string;
   }>;
+  customInstructions?: Record<string, string>; // Stage-specific system instruction overrides
 }
 
 export interface VoiceState {

@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { InstructionEditModal } from './components/InstructionEditModal';
 import { DiscoveryStage, AppState, FileContext, VoiceState, Project, ProjectMetadata, StageVersion, GroundingSource } from './types';
 import { STAGE_CONFIGS } from './constants';
 import { callGeminiAgent } from './services/geminiService';
@@ -112,6 +113,8 @@ const App: React.FC = () => {
   // Project Management State
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [showProjectList, setShowProjectList] = useState(false);
+  const [isInstructionModalOpen, setIsInstructionModalOpen] = useState(false);
+  const [customInstructions, setCustomInstructions] = useState<Record<string, string>>({});
 
   // Initialize Project System
   useEffect(() => {
@@ -138,17 +141,54 @@ const App: React.FC = () => {
   const loadProject = (project: Project) => {
     setActiveProjectId(project.id);
 
-    // Construct AppState from Project (excluding ID/meta timestamps for the state object itself if needed, 
-    // but Project extends AppState so it is compatible)
+    // Construct AppState from Project
     setState({
       currentStage: project.currentStage,
       projectMetadata: project.projectMetadata,
       stages: project.stages,
-      settings: project.settings || { isThinkingEnabled: false, isSearchEnabled: false }
+      settings: project.settings || { isThinkingEnabled: false, isSearchEnabled: false },
+      // IMPORTANT: State doesn't usually hold the project object directly, but we might want to extend it
+      // For now, we rely on activeProjectId to update 'currentProject' concept or update the state if we added fields.
+      // Wait, 'state' handles stages/metadata. Where is customInstructions stored in state?
+      // AppState needs to support it or we store it in a separate state or attach to 'currentProject' state if it exists.
+      // Looking at `state` definition lines 41-56, it does NOT have customInstructions. 
+      // I should add it to AppState or just keep it in sync with `activeProjectId`.
+      // Let's modify loadProject to set a local ref or state. 
     });
 
-    // If specific stage was active, maybe restore it? For now default behavior is defined by state.currentStage
+    // Set custom instructions into state (See next Edit to AppState definition)
+    if (project.customInstructions) {
+      setCustomInstructions(project.customInstructions);
+    } else {
+      setCustomInstructions({});
+    }
+
     setShowProjectList(false);
+  };
+
+  const handleSaveInstruction = async (instruction: string | undefined) => {
+    if (!activeProjectId) return;
+
+    try {
+      const newInstructions = { ...customInstructions };
+      if (instruction === undefined) {
+        delete newInstructions[state.currentStage];
+      } else {
+        newInstructions[state.currentStage] = instruction;
+      }
+
+      setCustomInstructions(newInstructions);
+
+      // Persist to Firestore
+      await projectService.updateProject(activeProjectId, {
+        customInstructions: newInstructions
+      });
+
+      setToast({ message: "System instructions updated.", type: 'success' });
+    } catch (e) {
+      console.error("Failed to save instructions", e);
+      setToast({ message: "Failed to save instructions.", type: 'error' });
+    }
   };
 
   const handleProjectUpdated = (updatedProject: Project) => {
@@ -768,7 +808,7 @@ When using Google Search:
         // We will pass the ID just for logging, but the service handles the specific Llama implementation.
         const groqResponse = await callGroqAgent(
           selectedModel, // Passed for logging, service decides actual endpoint
-          STAGE_CONFIGS[targetStage].systemInstruction,
+          customInstructions[targetStage] || STAGE_CONFIGS[targetStage].systemInstruction,
           finalUserPrompt,
           allFiles,
           state.settings.isThinkingEnabled,
@@ -788,7 +828,7 @@ When using Google Search:
         console.log(`[Dispatcher] Routing to Gemini Service (${selectedModel})...`);
         result = await callGeminiAgent(
           GeminiCapability.ANALYSIS_MAIN,
-          STAGE_CONFIGS[targetStage].systemInstruction,
+          customInstructions[targetStage] || STAGE_CONFIGS[targetStage].systemInstruction,
           finalUserPrompt,
           allFiles,
           state.settings.isThinkingEnabled,
@@ -2313,6 +2353,30 @@ When using Google Search:
                           <ModelSelector value={selectedModel} onChange={setSelectedModel} className="w-48" />
                         </div>
                       </div>
+
+                      {/* System Instruction Customization (Pro/Admin) */}
+                      <div className="mb-3 px-1">
+                        <button
+                          onClick={() => setIsInstructionModalOpen(true)}
+                          disabled={!(role === 'pro' || isAdmin) || !canEditProject}
+                          className={`w-full py-2 rounded-xl flex items-center justify-between px-4 border text-[10px] font-bold uppercase tracking-wider transition-all
+                                ${customInstructions[state.currentStage] ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-300' : 'bg-slate-800/30 border-slate-700/50 text-slate-500 hover:text-slate-300 hover:bg-slate-800/50'}
+                            `}
+                        >
+                          <div className="flex items-center gap-2">
+                            <i className={`fas ${customInstructions[state.currentStage] ? 'fa-robot text-indigo-400' : 'fa-cog'}`}></i>
+                            <span>System Instructions</span>
+                          </div>
+                          {!(role === 'pro' || isAdmin) ? (
+                            <i className="fas fa-lock text-slate-600"></i>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              {customInstructions[state.currentStage] && <span className="text-[9px] bg-indigo-500/20 px-1.5 py-0.5 rounded text-indigo-300">MODIFIED</span>}
+                              <i className="fas fa-chevron-right text-xs opacity-50"></i>
+                            </div>
+                          )}
+                        </button>
+                      </div>
                       <button
                         onClick={runAnalysis}
                         disabled={!!analyzingStage || (!currentStageData.input && currentStageData.files.length === 0) || !canEditProject}
@@ -2385,39 +2449,88 @@ When using Google Search:
                       </div>
                     )}
 
-                    {/* REGENERATION MODEL SELECTOR */}
-                    <div className="mb-3">
-                      <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-800/40 border border-slate-700/50 transition-all hover:bg-slate-800/60">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-800 text-slate-400">
-                            <i className="fas fa-microchip text-xs"></i>
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-black uppercase tracking-wider text-white leading-none">Intelligence Engine</p>
-                            <p className="text-[8px] text-slate-500 mt-1 uppercase font-bold tracking-widest">Select Model</p>
-                          </div>
+                    {/* System Instruction Visibility */}
+                    {/* REGENERATION CONTROLS GROUP */}
+                    <div className="flex flex-col gap-3">
+                      {/* System Instruction Visibility */}
+                      <div className="px-1">
+                        <div className="p-4 rounded-xl bg-slate-900/30 border border-slate-800/50 hover:bg-slate-900/50 transition-colors">
+                          <details className="group">
+                            <summary className="flex items-center justify-between cursor-pointer list-none">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center border ${customInstructions[state.currentStage] ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400' : 'bg-slate-800/50 border-slate-700/50 text-slate-500'}`}>
+                                  <i className="fas fa-robot text-xs"></i>
+                                </div>
+                                <div>
+                                  <p className="text-[10px] uppercase font-black tracking-widest text-slate-400 group-hover:text-slate-200 transition-colors">
+                                    System Instruction {customInstructions[state.currentStage] ? <span className="text-indigo-400 shadow-indigo-500/20 drop-shadow-sm ml-1">● Customized</span> : <span className="text-slate-600 ml-1">● Default</span>}
+                                  </p>
+                                  <p className="text-[9px] text-slate-600 font-bold uppercase tracking-widest mt-0.5">Click to view prompt configuration</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {(role === 'pro' || isAdmin) && canEditProject && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      setIsInstructionModalOpen(true);
+                                    }}
+                                    className="w-6 h-6 rounded-lg bg-slate-800 hover:bg-indigo-600 hover:text-white text-slate-500 transition-colors flex items-center justify-center border border-slate-700/50 hover:border-indigo-500/50"
+                                    title="Customize Instructions"
+                                  >
+                                    <i className="fas fa-pencil-alt text-[10px]"></i>
+                                  </button>
+                                )}
+                                <div className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center group-hover:bg-slate-700 transition-colors">
+                                  <i className="fas fa-chevron-down text-slate-500 text-[10px] transition-transform group-open:rotate-180"></i>
+                                </div>
+                              </div>
+                            </summary>
+                            <div className="mt-4 pt-4 border-t border-slate-800/50 animate-in slide-in-from-top-2 duration-300">
+                              <div className="bg-slate-950 rounded-lg p-3 border border-slate-800/50">
+                                <pre className="text-[10px] text-slate-400 font-mono whitespace-pre-wrap leading-relaxed custom-scrollbar max-h-64 overflow-y-auto">
+                                  {customInstructions[state.currentStage] || STAGE_CONFIGS[state.currentStage].systemInstruction}
+                                </pre>
+                              </div>
+                            </div>
+                          </details>
                         </div>
-                        <ModelSelector value={selectedModel} onChange={setSelectedModel} className="w-48" />
                       </div>
-                    </div>
 
-                    <button
-                      onClick={runAnalysis}
-                      disabled={!!analyzingStage || !canEditProject}
-                      title={!canEditProject ? "View Only Mode" : ""}
-                      className="w-[98%] mx-auto py-3 sm:py-4 btn-grad rounded-2xl text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed shadow-xl shadow-indigo-500/10 transition-transform"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        {analyzingStage === state.currentStage ? (
-                          <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                        ) : (
-                          <>
-                            <i className="fas fa-rotate text-sm translate-y-[0.5px]"></i>
-                            <span>{config.regenerateCta || 'Re-Analyze Stage'}</span>
-                          </>
-                        )}
+                      {/* REGENERATION MODEL SELECTOR */}
+                      <div>
+                        <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-800/40 border border-slate-700/50 transition-all hover:bg-slate-800/60">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-800 text-slate-400">
+                              <i className="fas fa-microchip text-xs"></i>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-wider text-white leading-none">Intelligence Engine</p>
+                              <p className="text-[8px] text-slate-500 mt-1 uppercase font-bold tracking-widest">Select Model</p>
+                            </div>
+                          </div>
+                          <ModelSelector value={selectedModel} onChange={setSelectedModel} className="w-48" />
+                        </div>
                       </div>
-                    </button>
+
+                      <button
+                        onClick={runAnalysis}
+                        disabled={!!analyzingStage || !canEditProject}
+                        title={!canEditProject ? "View Only Mode" : ""}
+                        className="w-[98%] mx-auto py-3 sm:py-4 btn-grad rounded-2xl text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em] flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed shadow-xl shadow-indigo-500/10 transition-transform"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          {analyzingStage === state.currentStage ? (
+                            <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                          ) : (
+                            <>
+                              <i className="fas fa-rotate text-sm translate-y-[0.5px]"></i>
+                              <span>{config.regenerateCta || 'Re-Analyze Stage'}</span>
+                            </>
+                          )}
+                        </div>
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -2675,6 +2788,7 @@ When using Google Search:
                       </div>
                     ) : (
                       <div className="space-y-8">
+
                         {structuredBlocks.map((block, idx) => (
                           <div key={idx} className="report-card animate-in fade-in slide-in-from-bottom-4 duration-700" style={{ animationDelay: `${idx * 0.1}s` }}>
                             <div className="flex justify-between items-start mb-6 -mt-2">
@@ -2851,7 +2965,7 @@ When using Google Search:
             </div>
           </div>
         </div >
-      </main>
+      </main >
 
       {
         (analyzingStage) && (
@@ -3252,39 +3366,43 @@ When using Google Search:
         )
       }
 
-      {showShareModal && activeProjectId && (
-        <ShareProjectModal
-          projectId={activeProjectId}
-          projectName={state.projectMetadata.companyName || 'Untitled Project'}
-          onClose={() => setShowShareModal(false)}
-        />
-      )}
+      {
+        showShareModal && activeProjectId && (
+          <ShareProjectModal
+            projectId={activeProjectId}
+            projectName={state.projectMetadata.companyName || 'Untitled Project'}
+            onClose={() => setShowShareModal(false)}
+          />
+        )
+      }
 
       {/* ESTIMATION STUDIO FULL SCREEN OVERLAY */}
-      {showEstimationStudio && (
-        <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col animate-in fade-in duration-300">
-          {/* Note: Header is handled inside EstimationSheet with onClose prop */}
-          <div className="flex-1 overflow-hidden">
-            <EstimationSheet
-              initialMarkdown={state.stages[DiscoveryStage.EPICS]?.output || ''}
-              className="h-full rounded-none"
-              onClose={() => setShowEstimationStudio(false)}
-              onSave={(data) => {
-                setState(prev => ({
-                  ...prev,
-                  stages: {
-                    ...prev.stages,
-                    [DiscoveryStage.EPICS]: {
-                      ...prev.stages[DiscoveryStage.EPICS],
-                      estimationSheetData: data
+      {
+        showEstimationStudio && (
+          <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col animate-in fade-in duration-300">
+            {/* Note: Header is handled inside EstimationSheet with onClose prop */}
+            <div className="flex-1 overflow-hidden">
+              <EstimationSheet
+                initialMarkdown={state.stages[DiscoveryStage.EPICS]?.output || ''}
+                className="h-full rounded-none"
+                onClose={() => setShowEstimationStudio(false)}
+                onSave={(data) => {
+                  setState(prev => ({
+                    ...prev,
+                    stages: {
+                      ...prev.stages,
+                      [DiscoveryStage.EPICS]: {
+                        ...prev.stages[DiscoveryStage.EPICS],
+                        estimationSheetData: data
+                      }
                     }
-                  }
-                }));
-              }}
-            />
+                  }));
+                }}
+              />
+            </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* GLOBAL MODALS */}
       <ConfirmationModal
@@ -3297,14 +3415,23 @@ When using Google Search:
         isDestructive={confirmation?.isDestructive}
       />
 
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
-    </div >
+      {
+        toast && (
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            onClose={() => setToast(null)}
+          />
+        )
+      }
+      <InstructionEditModal
+        isOpen={isInstructionModalOpen}
+        onClose={() => setIsInstructionModalOpen(false)}
+        stage={state.currentStage}
+        currentInstruction={customInstructions[state.currentStage]}
+        onSave={handleSaveInstruction}
+      />
+    </div>
   );
 };
 
