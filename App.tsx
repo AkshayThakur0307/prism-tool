@@ -81,7 +81,15 @@ const ModelSelector: React.FC<{ value: string; onChange: (val: string) => void; 
 
 const App: React.FC = () => {
   const { logout, user } = useAuth();
-  const { role, canUseAdvancedAI, canExportData, canUseRefinementStudio, canEditProject, isAdmin, canShareProject, canSyncJira, canUseEstimationStudio, canManageStageIterations } = useRBAC();
+  const { role, canUseAdvancedAI, canExportData, canUseRefinementStudio, canEditProject, isAdmin, canShareProject, canSyncJira, canUseEstimationStudio, canManageStageIterations, canCustomizeInstructions } = useRBAC();
+
+  // DEBUG: Permission Tracing
+  useEffect(() => {
+    console.log("[RBAC DEBUG] Current Role:", role);
+    console.log("[RBAC DEBUG] Can Customize Instructions:", canCustomizeInstructions);
+    console.log("[RBAC DEBUG] Can Use Refinement:", canUseRefinementStudio);
+  }, [role, canCustomizeInstructions, canUseRefinementStudio]);
+
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [state, setState] = useState<AppState>(INITIAL_STATE);
@@ -1731,7 +1739,7 @@ When using Google Search:
                   ${state.settings.isThinkingEnabled ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.2)]' : 'bg-slate-900 border-slate-700 text-slate-500 hover:text-slate-400 hover:border-slate-600'}
                   ${!canUseAdvancedAI ? 'opacity-50 cursor-not-allowed' : ''}
                   `}
-                title={!canUseAdvancedAI ? "Upgrade to Pro to enable Thinking Mode" : "Enhance reasoning with Gemini 2.0 Thinking Mode"}          >
+                title={!canUseAdvancedAI ? "Upgrade to enable Thinking Mode" : "Enhance reasoning with Gemini 2.0 Thinking Mode"}          >
                 <i className={`fas fa-brain text-xs sm:text-sm z-10 ${state.settings.isThinkingEnabled ? 'animate-pulse' : ''}`}></i>
                 {!canUseAdvancedAI && <div className="absolute inset-0 flex items-center justify-center bg-black/40"><i className="fas fa-lock text-[8px] text-amber-500"></i></div>}
               </button>
@@ -1767,7 +1775,7 @@ When using Google Search:
                 <button
                   disabled
                   className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/5 border border-emerald-500/10 text-emerald-400/50 cursor-not-allowed"
-                  title="Upgrade to Pro to export"
+                  title="Permission required to export"
                 >
                   <i className="fas fa-lock text-[10px] text-amber-500 mr-1"></i>
                   <span>Excel Export</span>
@@ -1783,7 +1791,7 @@ When using Google Search:
                   ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white'
                   : 'bg-slate-800/50 text-slate-500 cursor-not-allowed'}
               `}
-              title={canExportData ? "Export PDF" : "Upgrade to Pro to export PDF"}
+              title={canExportData ? "Export PDF" : "Permission required to export PDF"}
             >
               {!canExportData && <i className="fas fa-lock text-[9px] text-amber-500"></i>}
               <i className="fas fa-file-pdf"></i>
@@ -2358,7 +2366,7 @@ When using Google Search:
                       <div className="mb-3 px-1">
                         <button
                           onClick={() => setIsInstructionModalOpen(true)}
-                          disabled={!(role === 'pro' || isAdmin) || !canEditProject}
+                          disabled={!canCustomizeInstructions || !canEditProject}
                           className={`w-full py-2 rounded-xl flex items-center justify-between px-4 border text-[10px] font-bold uppercase tracking-wider transition-all
                                 ${customInstructions[state.currentStage] ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-300' : 'bg-slate-800/30 border-slate-700/50 text-slate-500 hover:text-slate-300 hover:bg-slate-800/50'}
                             `}
@@ -2367,7 +2375,7 @@ When using Google Search:
                             <i className={`fas ${customInstructions[state.currentStage] ? 'fa-robot text-indigo-400' : 'fa-cog'}`}></i>
                             <span>System Instructions</span>
                           </div>
-                          {!(role === 'pro' || isAdmin) ? (
+                          {!canCustomizeInstructions ? (
                             <i className="fas fa-lock text-slate-600"></i>
                           ) : (
                             <div className="flex items-center gap-2">
@@ -2610,7 +2618,7 @@ When using Google Search:
                           <button
                             onClick={() => setShowJiraSync(true)}
                             disabled={!canSyncJira}
-                            title={!canSyncJira ? "Requires Pro or Admin Role" : "Connect & Sync"}
+                            title={!canSyncJira ? "Permission required to Sync" : "Connect & Sync"}
                             className={`px-4 py-2 rounded-xl text-[10px] font-black text-white uppercase tracking-widest transition-all flex items-center gap-2 ${!canSyncJira ? 'bg-slate-700 cursor-not-allowed opacity-50' : 'bg-[#0052CC] hover:bg-[#0747A6]'}`}
                           >
                             <i className={`fas ${!canSyncJira ? 'fa-lock' : 'fa-plug'}`}></i> Connect & Sync
@@ -2723,7 +2731,7 @@ When using Google Search:
                           <button
                             onClick={() => setShowEstimationStudio(true)}
                             disabled={!canUseEstimationStudio}
-                            title={!canUseEstimationStudio ? "Requires Pro or Admin Role" : "Open Estimation Studio"}
+                            title={!canUseEstimationStudio ? "Permission required to Open Studio" : "Open Estimation Studio"}
                             className={`px-4 py-2 rounded-xl text-[10px] font-black text-white uppercase tracking-widest transition-all flex items-center gap-2 shadow-lg ${!canUseEstimationStudio ? 'bg-slate-700 cursor-not-allowed opacity-50 shadow-none' : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/20'}`}
                           >
                             <i className={`fas ${!canUseEstimationStudio ? 'fa-lock' : 'fa-external-link-alt'}`}></i> Open Studio
@@ -2742,9 +2750,9 @@ When using Google Search:
                           <>
                             <button
                               onClick={openRefinementModal}
-                              disabled={!canEditProject}
-                              className={`w-8 h-8 rounded-lg ${canEditProject ? 'bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/20' : 'bg-slate-800 text-slate-600 cursor-not-allowed opacity-50'} text-white flex items-center justify-center transition-all group`}
-                              title={canEditProject ? "Open AI Refinement Studio" : "Refinement Studio (View Only)"}
+                              disabled={!canEditProject || !canUseRefinementStudio}
+                              className={`w-8 h-8 rounded-lg ${canEditProject && canUseRefinementStudio ? 'bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/20' : 'bg-slate-800 text-slate-600 cursor-not-allowed opacity-50'} text-white flex items-center justify-center transition-all group`}
+                              title={!canUseRefinementStudio ? "Permission required" : canEditProject ? "Open AI Refinement Studio" : "Refinement Studio (View Only)"}
                             >
                               <i className="fas fa-wand-magic-sparkles text-xs group-hover:animate-pulse"></i>
                             </button>

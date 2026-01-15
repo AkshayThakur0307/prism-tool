@@ -1,39 +1,46 @@
-
 import { useAuth } from '../contexts/AuthContext';
+import { usePermissions, FeatureKey } from '../contexts/PermissionContext';
 
 export const useRBAC = () => {
     const { userProfile, loading } = useAuth();
+    const { permissions, isLoading: isPermissionsLoading } = usePermissions();
 
-    const role = userProfile?.role || 'viewer'; // Default to safe 'viewer' if not loaded
-    console.log("[RBAC] Current Role:", role, "| User:", userProfile?.email);
+    // Default to 'standard' if logged in but role missing, 'viewer' if not logged in
+    const role = userProfile?.role || (userProfile ? 'standard' : 'viewer');
+
+    // Helper to check permission safely
+    const hasAccess = (feature: FeatureKey) => {
+        return permissions[feature]?.includes(role) || false;
+    };
 
     return {
         role,
-        isLoading: loading,
+        isLoading: loading || isPermissionsLoading,
 
         // Feature Permissions
-        canCreateProject: role === 'standard' || role === 'pro' || role === 'admin',
-        canEditProject: role === 'standard' || role === 'pro' || role === 'admin',
-        canDeleteProject: role === 'standard' || role === 'pro' || role === 'admin',
+        canCreateProject: hasAccess('canCreateProject'),
+        canEditProject: hasAccess('canEditProject'),
+        canDeleteProject: hasAccess('canDeleteProject'),
 
         // AI Features
-        canUseBasicAI: role === 'standard' || role === 'pro' || role === 'admin',
-        canUseAdvancedAI: role === 'pro' || role === 'admin', // Thinking Mode, Research Grounding
+        canUseBasicAI: hasAccess('canUseBasicAI'),
+        canUseAdvancedAI: hasAccess('canUseAdvancedAI'), // Thinking Mode, Research Grounding
+        canCustomizeInstructions: hasAccess('canCustomizeInstructions'),
 
         // Export / Integrations
-        canExportData: role === 'pro' || role === 'admin',
-        canSyncJira: role === 'pro' || role === 'admin',
-        canUseEstimationStudio: role === 'pro' || role === 'admin',
-        canManageStageIterations: role === 'pro' || role === 'admin', // Reset / Restore Versions
+        canExportData: hasAccess('canExportData'),
+        canSyncJira: hasAccess('canSyncJira'),
+        canUseEstimationStudio: hasAccess('canUseEstimationStudio'),
+        canManageStageIterations: hasAccess('canManageStageIterations'), // Reset / Restore Versions
 
         // Refinement
-        canUseRefinementStudio: role === 'pro' || role === 'admin',
+        canUseRefinementStudio: hasAccess('canUseRefinementStudio'),
 
-        // Admin
+        // Admin (Hardcoded protection)
         isAdmin: role === 'admin',
         canManageUsers: role === 'admin',
 
         // Share Permission
-        canShareProject: role === 'pro' || role === 'admin',
+        canShareProject: hasAccess('canShareProject'),
     };
 };

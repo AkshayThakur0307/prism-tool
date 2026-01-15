@@ -42,6 +42,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 profileUnsubscribe = onSnapshot(userRef, async (docSnap) => {
                     if (docSnap.exists()) {
                         const data = docSnap.data() as UserProfile;
+                        // Ensure role exists, default to standard (handles legacy users)
+                        if (!data.role) data.role = 'standard';
                         console.log("Updated User Profile:", data);
                         setUserProfile(data);
                     } else {

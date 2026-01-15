@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import './src/index.css';
 import App from './App';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
+import { PermissionProvider } from './src/contexts/PermissionContext';
 import LoginScreen from './components/LoginScreen';
 
 const ProtectedApp = () => {
@@ -32,7 +33,9 @@ const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
     <AuthProvider>
-      <ProtectedApp />
+      <PermissionProvider>
+        <ProtectedApp />
+      </PermissionProvider>
     </AuthProvider>
   </React.StrictMode>
 );
