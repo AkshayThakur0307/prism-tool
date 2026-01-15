@@ -2477,7 +2477,7 @@ When using Google Search:
                                 </div>
                               </div>
                               <div className="flex items-center gap-2">
-                                {(role === 'pro' || isAdmin) && canEditProject && (
+                                {canCustomizeInstructions && canEditProject && (
                                   <button
                                     onClick={(e) => {
                                       e.preventDefault();
