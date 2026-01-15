@@ -86,44 +86,47 @@ export const jiraProxy = onRequest(async (request, response) => {
     response.set("Access-Control-Allow-Origin", "*");
     if (request.method === "OPTIONS") {
         response.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE, PATCH");
-        response.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Atlassian-Token");
+        // Allow X-Jira-Domain and other headers
+        response.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Atlassian-Token, X-Jira-Domain");
         response.set("Access-Control-Max-Age", "86400");
         response.status(204).send("");
         return;
     }
 
-    // 2. Validate Env
-    if (!JIRA_DOMAIN) {
-        logger.error("VITE_JIRA_DOMAIN is not set");
-        response.status(500).json({ error: "VITE_JIRA_DOMAIN environment variable is not set in Firebase Functions." });
-        return;
-    }
-
     try {
-        // 3. Construct Target URL
-        // The request.url in Firebase Functions includes the full path (e.g. /jira-api/rest/api/...)
-        // if rewritten from firebase.json.
-        // However, sometimes it might be just the path.
-        // We want to extract everything AFTER /jira-api/
+        // 2. Determine Target Domain (Dynamic Routing)
+        // Check for the custom header first, fall back to Env Var
+        const customDomain = request.headers['x-jira-domain'] as string;
+        let targetDomain = '';
 
-        // We can rely on request.path which is the path part of the URL
-        // e.g. /jira-api/rest/api/2/issue
+        if (customDomain) {
+            targetDomain = customDomain.startsWith("http") ? customDomain : `https://${customDomain}`;
+        } else if (JIRA_DOMAIN) {
+            targetDomain = JIRA_DOMAIN.startsWith("http") ? JIRA_DOMAIN : `https://${JIRA_DOMAIN}`;
+        } else {
+            logger.error("No Jira Domain provided (header or env)");
+            response.status(500).json({ error: "Configuration Error: No Jira Domain found." });
+            return;
+        }
+
+        // 3. Construct Target URL
+        // We want to extract everything *after* the trigger path.
+        // If the rewrite is /jira-api/** -> jiraProxy, request.url usually preserves the path.
+        // We'll strip /jira-api if present.
         let targetPath = request.path;
         if (targetPath.startsWith("/jira-api")) {
             targetPath = targetPath.replace(/^\/jira-api/, "");
         }
 
-        // Ensure domain has protocol
-        const targetDomain = JIRA_DOMAIN.startsWith("http") ? JIRA_DOMAIN : `https://${JIRA_DOMAIN}`;
+        // Remove double slashes just in case
+        if (!targetPath.startsWith('/')) targetPath = '/' + targetPath;
 
-        // Combine. Note: targetPath usually starts with /
         const targetUrl = new URL(targetPath, targetDomain).toString();
+        logger.info(`Proxying request to: ${targetUrl} (Domain: ${targetDomain})`);
 
-        logger.info(`Proxying request to: ${targetUrl}`);
-
-        // 4. Prepare Headers
+        // 4. Prepare Headers (Security Hardening)
         const newHeaders: any = {};
-        const skipHeaders = ['host', 'origin', 'referer', 'content-length'];
+        const skipHeaders = ['host', 'origin', 'referer', 'content-length', 'cookie', 'user-agent']; // STRIP COOKIE & UA
 
         for (const [key, value] of Object.entries(request.headers)) {
             if (!skipHeaders.includes(key.toLowerCase())) {
@@ -131,8 +134,20 @@ export const jiraProxy = onRequest(async (request, response) => {
             }
         }
 
-        // Jira specific
+        // Inject Security Headers
         newHeaders['X-Atlassian-Token'] = 'no-check';
+        newHeaders['User-Agent'] = 'JiraAgent/1.0 (Integration)'; // Clean UA
+
+        // Strict Origin Sanitization
+        try {
+            // Create clean origin from target domain (protocol + host only)
+            const originUrl = new URL(targetDomain);
+            newHeaders['Origin'] = originUrl.origin;
+            newHeaders['Referer'] = originUrl.origin;
+        } catch (e) {
+            // Fallback
+            newHeaders['Origin'] = targetDomain;
+        }
 
         // 5. Fetch Options
         const fetchOptions: any = {
@@ -150,15 +165,13 @@ export const jiraProxy = onRequest(async (request, response) => {
         const jiraResponse = await fetch(targetUrl, fetchOptions);
 
         // 7. Send Response
-        // Copy headers from Jira response
         jiraResponse.headers.forEach((value, key) => {
-            // Skip some headers that might conflict or cause issues
             if (key.toLowerCase() !== 'content-encoding' && key.toLowerCase() !== 'content-length') {
                 response.set(key, value);
             }
         });
 
-        // Ensure CORS on response especially if fetch fails or for clarity
+        // Ensure CORS on main response
         response.set("Access-Control-Allow-Origin", "*");
 
         const buffer = await jiraResponse.buffer();

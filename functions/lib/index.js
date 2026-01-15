@@ -7,12 +7,38 @@
  *
  * See a full list of supported triggers at https://firebase.google.com/docs/functions
  */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.jiraProxy = exports.shareProject = void 0;
 const https_1 = require("firebase-functions/v2/https");
-const logger = require("firebase-functions/logger");
-const admin = require("firebase-admin");
-const node_fetch_1 = require("node-fetch");
+const logger = __importStar(require("firebase-functions/logger"));
+const admin = __importStar(require("firebase-admin"));
+const node_fetch_1 = __importDefault(require("node-fetch"));
 admin.initializeApp();
 // We can access environment variables via process.env 
 // provided they are set via `firebase functions:config:set` or .env files
@@ -75,44 +101,63 @@ exports.jiraProxy = (0, https_1.onRequest)(async (request, response) => {
     response.set("Access-Control-Allow-Origin", "*");
     if (request.method === "OPTIONS") {
         response.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE, PATCH");
-        response.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Atlassian-Token");
+        // Allow X-Jira-Domain and other headers
+        response.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Atlassian-Token, X-Jira-Domain");
         response.set("Access-Control-Max-Age", "86400");
         response.status(204).send("");
         return;
     }
-    // 2. Validate Env
-    if (!JIRA_DOMAIN) {
-        logger.error("VITE_JIRA_DOMAIN is not set");
-        response.status(500).json({ error: "VITE_JIRA_DOMAIN environment variable is not set in Firebase Functions." });
-        return;
-    }
     try {
+        // 2. Determine Target Domain (Dynamic Routing)
+        // Check for the custom header first, fall back to Env Var
+        const customDomain = request.headers['x-jira-domain'];
+        let targetDomain = '';
+        if (customDomain) {
+            targetDomain = customDomain.startsWith("http") ? customDomain : `https://${customDomain}`;
+        }
+        else if (JIRA_DOMAIN) {
+            targetDomain = JIRA_DOMAIN.startsWith("http") ? JIRA_DOMAIN : `https://${JIRA_DOMAIN}`;
+        }
+        else {
+            logger.error("No Jira Domain provided (header or env)");
+            response.status(500).json({ error: "Configuration Error: No Jira Domain found." });
+            return;
+        }
         // 3. Construct Target URL
-        // The request.url in Firebase Functions includes the full path (e.g. /jira-api/rest/api/...)
-        // if rewritten from firebase.json.
-        // However, sometimes it might be just the path.
-        // We want to extract everything AFTER /jira-api/
-        // We can rely on request.path which is the path part of the URL
-        // e.g. /jira-api/rest/api/2/issue
+        // We want to extract everything *after* the trigger path.
+        // If the rewrite is /jira-api/** -> jiraProxy, request.url usually preserves the path.
+        // We'll strip /jira-api if present.
         let targetPath = request.path;
         if (targetPath.startsWith("/jira-api")) {
             targetPath = targetPath.replace(/^\/jira-api/, "");
         }
-        // Ensure domain has protocol
-        const targetDomain = JIRA_DOMAIN.startsWith("http") ? JIRA_DOMAIN : `https://${JIRA_DOMAIN}`;
-        // Combine. Note: targetPath usually starts with /
+        // Remove double slashes just in case
+        if (!targetPath.startsWith('/'))
+            targetPath = '/' + targetPath;
         const targetUrl = new URL(targetPath, targetDomain).toString();
-        logger.info(`Proxying request to: ${targetUrl}`);
-        // 4. Prepare Headers
+        logger.info(`Proxying request to: ${targetUrl} (Domain: ${targetDomain})`);
+        // 4. Prepare Headers (Security Hardening)
         const newHeaders = {};
-        const skipHeaders = ['host', 'origin', 'referer', 'content-length'];
+        const skipHeaders = ['host', 'origin', 'referer', 'content-length', 'cookie', 'user-agent']; // STRIP COOKIE & UA
         for (const [key, value] of Object.entries(request.headers)) {
             if (!skipHeaders.includes(key.toLowerCase())) {
                 newHeaders[key] = value;
             }
         }
-        // Jira specific
+        // Inject Security Headers
         newHeaders['X-Atlassian-Token'] = 'no-check';
+        newHeaders['User-Agent'] = 'JiraAgent/1.0 (Integration)'; // Clean UA
+        // Strict Origin Sanitization
+        try {
+            // Create clean origin from target domain (protocol + host only)
+            const originUrl = new URL(targetDomain);
+            newHeaders['Origin'] = originUrl.origin;
+            newHeaders['Referer'] = originUrl.origin;
+        }
+        catch (e) {
+            // Fallback
+            newHeaders['Origin'] = targetDomain;
+        }
         // 5. Fetch Options
         const fetchOptions = {
             method: request.method,
@@ -126,14 +171,12 @@ exports.jiraProxy = (0, https_1.onRequest)(async (request, response) => {
         // 6. Execute Fetch
         const jiraResponse = await (0, node_fetch_1.default)(targetUrl, fetchOptions);
         // 7. Send Response
-        // Copy headers from Jira response
         jiraResponse.headers.forEach((value, key) => {
-            // Skip some headers that might conflict or cause issues
             if (key.toLowerCase() !== 'content-encoding' && key.toLowerCase() !== 'content-length') {
                 response.set(key, value);
             }
         });
-        // Ensure CORS on response especially if fetch fails or for clarity
+        // Ensure CORS on main response
         response.set("Access-Control-Allow-Origin", "*");
         const buffer = await jiraResponse.buffer();
         response.status(jiraResponse.status).send(buffer);
