@@ -13,6 +13,10 @@ export interface GeminiAgentResponse {
   sources?: GroundingSource[];
   searchEntryPointHtml?: string;
   rawResponse?: any;
+  toolCall?: {
+    name: string;
+    args: any;
+  };
 }
 
 export async function callGeminiAgent(
@@ -119,6 +123,11 @@ export async function callGeminiAgent(
 
     console.log(`[Gemini] Calling model ${modelToUse} (Thinking: ${isThinking}, Search: ${useSearch}, Tools: ${tools?.length})...`);
 
+    // DEBUG TOOL STRUCTURE
+    if (config.tools) {
+      console.log("[Gemini] Tools Config:", JSON.stringify(config.tools, null, 2));
+    }
+
     // PRIMARY CALL
     let response = await ai.models.generateContent({
       model: modelToUse,
@@ -194,7 +203,45 @@ ${serperResults.text}
       }
     }
 
-    const text = response.text || "No response received from agent.";
+    // Normalize Response Object (Handle GoogleGenAI result vs response structure)
+    // The result object from generateContent has a .response property which contains the actual data.
+    const actualResponse = (response as any).response || response;
+
+    // Extract Candidates
+    const candidates = actualResponse.candidates || [];
+
+    // Extract Tool Call if present
+    let toolCall: { name: string, args: any } | undefined = undefined;
+    if (candidates.length > 0) {
+      const parts = candidates[0].content?.parts || [];
+      const functionCallPart = parts.find((p: any) => p.functionCall);
+      if (functionCallPart) {
+        toolCall = {
+          name: functionCallPart.functionCall.name,
+          args: functionCallPart.functionCall.args
+        };
+      }
+    }
+
+    // Extract Text (text is a getter in GoogleGenAI types, use without parens)
+    let text = "";
+    try {
+      if (typeof actualResponse.text === 'function') {
+        text = actualResponse.text();
+      } else if (actualResponse.text) {
+        text = actualResponse.text;
+      }
+    } catch (e) {
+      // text getter might throw if content is missing/blocked (common in tool calls)
+      console.log("No text content in response (likely function call).");
+    }
+
+    // Only set default error if both text and toolCall are missing
+    if (!text && !toolCall) {
+      text = "No response received from agent.";
+    }
+
+    console.log("Gemini Response Parsed:", { hasText: !!text, hasToolCall: !!toolCall });
 
     // Extract grounding metadata if available (from Native Search)
     const sources: GroundingSource[] = [];
@@ -226,32 +273,41 @@ ${serperResults.text}
       text,
       sources: uniqueSources.length > 0 ? uniqueSources : undefined,
       searchEntryPointHtml,
-      rawResponse: response // Return raw for tool parsing
+      rawResponse: response, // Keep for backward compat if needed
+      toolCall: toolCall
     };
 
   } catch (error: any) {
     console.error(`[Gemini] Error: ${error.message}. Initiating LLM FAILOVER to Groq...`);
 
-    // LLM FAILOVER LOGIC -> Call Groq
+    // Failover to Groq
+    console.log("Failing over to Groq due to Gemini error...");
     try {
-      return await callGroqAgent(
-        'openai/gpt-oss-120b', // Fallback model
+      const groqResponse = await callGroqAgent(
+        modelOverride || 'llama-3.3-70b-versatile', // Default mapped inside
         systemInstruction,
         userPrompt,
         contextFiles,
-        isThinking, // Groq service handles mapping this to system prompt instructions
-        useSearch, // Groq service handles Serper search internally
-        temperature, // Pass original temperature
-        topP // Pass original topP
+        isThinking,
+        useSearch,
+        temperature,
+        topP,
+        tools
       );
-    } catch (groqError: any) {
+
+      // Map Groq response to GeminiAgentResponse
+      return {
+        text: groqResponse.text,
+        sources: groqResponse.sources,
+        searchEntryPointHtml: groqResponse.searchEntryPointHtml,
+        toolCall: groqResponse.toolCall
+      };
+    }
+    catch (groqError: any) {
       console.error(`[Gemini] FATAL: Fallback to Groq also failed: ${groqError.message}`);
       throw new Error("All AI services failed. Please check your connection or API keys.");
     }
   }
-
-
-
 }
 
 export async function refineInputText(text: string, contextType: string = 'general'): Promise<string> {

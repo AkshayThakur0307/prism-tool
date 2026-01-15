@@ -12,6 +12,7 @@ import { createLiveAssistant } from './services/liveService';
 import { HybridVoiceAssistant } from './services/groqVoiceService';
 import { VoiceInputTrigger } from './components/VoiceInputTrigger';
 import { RefineInputButton } from './components/RefineInputButton';
+import { JIRA_TOOLS, jiraAgent } from './services/jiraAgent';
 import MarkdownRenderer from './components/MarkdownRenderer';
 import PresentationView from './components/PresentationView';
 import ChatBot from './components/ChatBot';
@@ -203,6 +204,8 @@ const App: React.FC = () => {
 
   // Immersive Refinement Modal State
   const [showRefinementModal, setShowRefinementModal] = useState(false);
+  const [isRefinementJiraMode, setIsRefinementJiraMode] = useState(false);
+  const [pendingRefinementToolCall, setPendingRefinementToolCall] = useState<any>(null); // For deletion confirmation
   const [previewOutput, setPreviewOutput] = useState(''); // Holds the provisional content in modal
   const [refinementChatHistory, setRefinementChatHistory] = useState<Array<{ role: 'user' | 'ai', text: string }>>([]);
   const [refinementInput, setRefinementInput] = useState('');
@@ -886,7 +889,7 @@ When using Google Search:
     setIsRefining(true);
 
     try {
-      const refineSystemInstruction = `You are an expert editor collaborating with a user on a document. 
+      let refineSystemInstruction = `You are an expert editor collaborating with a user on a document. 
       Your task is to MODIFY the document content based on the user's latest instruction.
       Maintain the original structure, tone, and formatting unless explicitly asked to change it.
       
@@ -895,6 +898,22 @@ When using Google Search:
       2. Do not include any conversational preamble or explanation in the document output.
       3. The user's goal is to improve the document iteratively.`;
 
+      if (isRefinementJiraMode) {
+        refineSystemInstruction += `
+            \n=== JIRA AGENT MODE ACTIVE ===
+            You have full authorization to manage Jira tickets.
+            Your capabilities:
+            - Create Epics, Stories, Tasks, Ideas.
+            - Read and Search tickets (use JQL for search).
+            - Update ticket fields.
+            - Delete tickets (Use CAUTION).
+            - Transition tickets through workflow states.
+
+            If the user asks to perform a Jira action, call the appropriate tool.
+            If the user just wants to edit the document, proceed with the document modification.
+          `;
+      }
+
       const refineUserPrompt = `
       CURRENT DOCUMENT CONTENT:
       ${previewOutput}
@@ -902,7 +921,7 @@ When using Google Search:
       USER INSTRUCTION:
       ${userMessage}
 
-      Provide the fully updated document content below:
+      Provide the fully updated document content below (OR call a tool if requested):
       `;
 
       // Using ANALYSIS_MAIN capability for high quality editing
@@ -913,8 +932,49 @@ When using Google Search:
         [],
         false,
         false,
-        selectedModel // Apply the selected model override
+        selectedModel, // Apply the selected model override
+        isRefinementJiraMode ? JIRA_TOOLS : undefined
       );
+
+      // CHECK FOR TOOL CALLS
+      if (isRefinementJiraMode && result.toolCall) {
+        const toolCall = result.toolCall;
+        setRefinementChatHistory(prev => [...prev, { role: 'ai', text: `⚙️ Executing Jira Action: ${toolCall.name}...` }]);
+
+        // Config for Jira Agent
+        const config = {
+          projectKey: (process.env as any).VITE_JIRA_PROJECT_KEY || '',
+          email: (process.env as any).VITE_JIRA_EMAIL || '',
+          apiToken: (process.env as any).VITE_JIRA_API_TOKEN || '',
+          domain: (process.env as any).VITE_JIRA_DOMAIN || ''
+        };
+
+
+        // Intercept DELETE for confirmation
+        if (toolCall.name === 'delete_ticket') {
+          setPendingRefinementToolCall(toolCall);
+          setConfirmation({
+            type: 'DELETE_JIRA_TICKET' as any,
+            payload: toolCall,
+            title: "⚠️ Confirm Deletion",
+            message: `You are about to DELETE a Jira ticket (${toolCall.args.issueKey}). This action cannot be undone. Are you sure?`,
+            confirmLabel: "Yes, Delete Ticket",
+            isDestructive: true
+          } as any);
+
+          setIsRefining(false);
+          return;
+        }
+
+        try {
+          const toolResult = await jiraAgent.executeJiraTool(toolCall, config);
+          setRefinementChatHistory(prev => [...prev, { role: 'ai', text: `✅ Action Complete: ${toolResult}` }]);
+        } catch (err: any) {
+          setRefinementChatHistory(prev => [...prev, { role: 'ai', text: `❌ Action Failed: ${err.message}` }]);
+        }
+        setIsRefining(false);
+        return;
+      }
 
       setPreviewOutput(result.text);
       setRefinementChatHistory(prev => [...prev, { role: 'ai', text: "I've updated the document based on your request. Check the preview!" }]);
@@ -924,7 +984,9 @@ When using Google Search:
       alert(`Refinement Error: ${error.message || "Unknown error"}`);
       setRefinementChatHistory(prev => [...prev, { role: 'ai', text: "Sorry, I encountered an error while processing your request. Please try again." }]);
     } finally {
-      setIsRefining(false);
+      if (!pendingRefinementToolCall) {
+        setIsRefining(false);
+      }
     }
   };
 
@@ -1260,6 +1322,24 @@ When using Google Search:
         break;
       case 'JIRA_SYNC_SUCCESS':
         // Just close modal
+        break;
+      case 'DELETE_JIRA_TICKET' as any:
+        if (pendingRefinementToolCall) {
+          const config = {
+            projectKey: (process.env as any).VITE_JIRA_PROJECT_KEY || '',
+            email: (process.env as any).VITE_JIRA_EMAIL || '',
+            apiToken: (process.env as any).VITE_JIRA_API_TOKEN || '',
+            domain: (process.env as any).VITE_JIRA_DOMAIN || ''
+          };
+          setRefinementChatHistory(prev => [...prev, { role: 'ai', text: `Confirmed. Deleting ticket...` }]);
+          jiraAgent.executeJiraTool(pendingRefinementToolCall, config)
+            .then(res => setRefinementChatHistory(prev => [...prev, { role: 'ai', text: `✅ ${res}` }]))
+            .catch(err => setRefinementChatHistory(prev => [...prev, { role: 'ai', text: `❌ Deletion Failed: ${err.message}` }]))
+            .finally(() => {
+              setPendingRefinementToolCall(null);
+              setIsRefining(false);
+            });
+        }
         break;
     }
     setConfirmation(null);
@@ -3015,6 +3095,21 @@ When using Google Search:
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
+                  {/* Jira Toggle - Only visible in EPICS stage */}
+                  {state.currentStage === DiscoveryStage.EPICS && (
+                    <button
+                      onClick={() => setIsRefinementJiraMode(!isRefinementJiraMode)}
+                      className={`px-3 py-1.5 rounded-lg border text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-2
+                                ${isRefinementJiraMode
+                          ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/30'
+                          : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-blue-400 hover:border-blue-400/50'}
+                            `}
+                      title="Enable Autonomous Jira Agent"
+                    >
+                      <i className="fab fa-jira"></i>
+                      {isRefinementJiraMode ? 'Jira ON' : 'Jira OFF'}
+                    </button>
+                  )}
                   <ModelSelector
                     value={selectedModel}
                     onChange={setSelectedModel}

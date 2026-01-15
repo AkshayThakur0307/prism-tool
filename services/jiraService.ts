@@ -26,10 +26,12 @@ export const jiraService = {
      * Create an Epic or Story in Jira
      * Note: We use a proxy logic if needed, but for now we'll attempt direct with proper headers
      */
-    createIssue: async (config: JiraConfig, summary: string, description: string, issueType: 'Epic' | 'Story' | 'Task' = 'Story', parentKey?: string): Promise<JiraIssueResponse> => {
-        // Use the Cloudflare Worker proxy if configured, otherwise local Vite proxy
-        const proxyBase = (import.meta.env.VITE_JIRA_PROXY_URL as string);
-        const baseUrl = proxyBase ? `${proxyBase.replace(/\/$/, '')}/jira-api` : '/jira-api';
+    /**
+     * Create an Epic, Story, Task, or JPD Idea in Jira
+     */
+    createIssue: async (config: JiraConfig, summary: string, description: string, issueType: 'Epic' | 'Story' | 'Task' | 'Idea' = 'Story', parentKey?: string): Promise<JiraIssueResponse> => {
+        // Use local Vite proxy which forwards to the configured Jira instance
+        const baseUrl = '/jira-api';
         const url = `${baseUrl}/rest/api/3/issue`;
 
         // Jira strictly enforces a 255 character limit for summaries
@@ -87,6 +89,143 @@ export const jiraService = {
         }
 
         return response.json();
+    },
+
+    /**
+     * Get Issue Details
+     */
+    getIssue: async (config: JiraConfig, issueKey: string): Promise<any> => {
+        const baseUrl = '/jira-api';
+        const url = `${baseUrl}/rest/api/3/issue/${issueKey}`;
+
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Authorization': jiraService.getAuthHeader(config.email, config.apiToken),
+                'Accept': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch issue ${issueKey}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Search Issues using JQL
+     */
+    searchIssues: async (config: JiraConfig, jql: string): Promise<any> => {
+        const baseUrl = '/jira-api';
+        const url = `${baseUrl}/rest/api/3/search?jql=${encodeURIComponent(jql)}`;
+
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Authorization': jiraService.getAuthHeader(config.email, config.apiToken),
+                'Accept': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to search issues with JQL: ${jql}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Update Issue (Summary, Description, etc.)
+     */
+    updateIssue: async (config: JiraConfig, issueKey: string, fields: any): Promise<void> => {
+        const baseUrl = '/jira-api';
+        const url = `${baseUrl}/rest/api/3/issue/${issueKey}`;
+
+        const body = { fields };
+
+        const response = await fetch(url, {
+            method: 'PUT',
+            headers: {
+                'Authorization': jiraService.getAuthHeader(config.email, config.apiToken),
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to update issue ${issueKey}`);
+        }
+    },
+
+    /**
+     * Delete Issue
+     */
+    deleteIssue: async (config: JiraConfig, issueKey: string): Promise<void> => {
+        const baseUrl = '/jira-api';
+        const url = `${baseUrl}/rest/api/3/issue/${issueKey}`;
+
+        const response = await fetch(url, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': jiraService.getAuthHeader(config.email, config.apiToken),
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to delete issue ${issueKey}`);
+        }
+    },
+
+    /**
+     * Get Transitions
+     */
+    getTransitions: async (config: JiraConfig, issueKey: string): Promise<any> => {
+        const baseUrl = '/jira-api';
+        const url = `${baseUrl}/rest/api/3/issue/${issueKey}/transitions`;
+
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Authorization': jiraService.getAuthHeader(config.email, config.apiToken),
+                'Accept': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to get transitions for ${issueKey}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Transition Issue
+     */
+    transitionIssue: async (config: JiraConfig, issueKey: string, transitionId: string): Promise<void> => {
+        const baseUrl = '/jira-api';
+        const url = `${baseUrl}/rest/api/3/issue/${issueKey}/transitions`;
+
+        const body = {
+            transition: {
+                id: transitionId
+            }
+        };
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': jiraService.getAuthHeader(config.email, config.apiToken),
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to transition issue ${issueKey} to state ${transitionId}`);
+        }
     },
 
     /**

@@ -1,9 +1,29 @@
 import path from 'path';
+import fs from 'fs';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
+
+  // fallback: try reading mcp_config.json
+  try {
+    const mcpPath = path.resolve(__dirname, 'mcp_config.json');
+    if (fs.existsSync(mcpPath)) {
+      const mcpConfig = JSON.parse(fs.readFileSync(mcpPath, 'utf-8'));
+      const jiraEnv = mcpConfig?.mcpServers?.['jira-mcp']?.env;
+
+      if (jiraEnv) {
+        console.log("Loading Jira credentials from mcp_config.json...");
+        if (!env.VITE_JIRA_DOMAIN && jiraEnv.JIRA_URL) env.VITE_JIRA_DOMAIN = jiraEnv.JIRA_URL;
+        if (!env.VITE_JIRA_EMAIL && jiraEnv.JIRA_USERNAME) env.VITE_JIRA_EMAIL = jiraEnv.JIRA_USERNAME;
+        if (!env.VITE_JIRA_API_TOKEN && jiraEnv.JIRA_API_TOKEN) env.VITE_JIRA_API_TOKEN = jiraEnv.JIRA_API_TOKEN;
+      }
+    }
+  } catch (e) {
+    console.warn("Failed to read mcp_config.json:", e);
+  }
+
   return {
     server: {
       port: 3000,

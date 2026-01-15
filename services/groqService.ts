@@ -6,6 +6,10 @@ export interface GroqAgentResponse {
     text: string;
     sources?: GroundingSource[];
     searchEntryPointHtml?: string;
+    toolCall?: {
+        name: string;
+        args: any;
+    };
 }
 
 export async function callGroqAgent(
@@ -16,7 +20,8 @@ export async function callGroqAgent(
     isThinking: boolean = false,
     useSearch: boolean = false,
     temperature?: number,
-    topP?: number
+    topP?: number,
+    tools?: any[] // Support generic tools (Gemini format)
 ): Promise<GroqAgentResponse> {
 
     if (!process.env.GROQ_API_KEY) {
@@ -154,7 +159,32 @@ ${searchResults.text}
         messages.push({ role: "user", content: fullPrompt });
     }
 
-    console.log("[groqService] Receiving params:", { temperature, topP, isThinking });
+    // Tool Transformation Logic (Gemini -> OpenAI Format)
+    let openAITools: any[] | undefined = undefined;
+    if (tools && tools.length > 0) {
+        openAITools = [];
+        tools.forEach(toolWrapper => {
+            // Gemini tools are wrapped like { functionDeclarations: [...] } or { googleSearch: {} }
+            // Support both camelCase (SDK standard) and snake_case (legacy/API)
+            const methods = toolWrapper.functionDeclarations || toolWrapper.function_declarations;
+
+            if (methods) {
+                methods.forEach((fd: any) => {
+                    openAITools?.push({
+                        type: "function",
+                        function: {
+                            name: fd.name,
+                            description: fd.description,
+                            parameters: fd.parameters // JSON Schema is compatible
+                        }
+                    });
+                });
+            }
+        });
+        if (openAITools.length === 0) openAITools = undefined;
+    }
+
+    console.log("[groqService] Receiving params:", { temperature, topP, isThinking, toolsCount: openAITools?.length });
 
     try {
         const chatCompletion = await groq.chat.completions.create({
@@ -165,27 +195,47 @@ ${searchResults.text}
             top_p: topP !== undefined ? topP : 1,
             stop: null,
             stream: false,
+            tools: openAITools,
+            tool_choice: openAITools ? "auto" : "none"
         });
 
-        let text = chatCompletion.choices[0]?.message?.content || "No response received from Groq agent.";
+        const choice = chatCompletion.choices[0];
+        let text = choice?.message?.content || "";
+        let toolCall: { name: string, args: any } | undefined = undefined;
 
-        // CLEANUP: Extract final answer by removing <thought> blocks
-        if (isThinking) {
-            console.log("Processing thinking output...");
-            // Remove everything between <thought> and </thought> inclusive
-            // Supporting both lowercase and uppercase tags
-            text = text.replace(/<(thought|THOUGHT)>[\s\S]*?<\/(thought|THOUGHT)>/gi, '').trim();
-            // Fallback: If model didn't use tags correctly but just started reasoning, we try to grab the structured parts
-            // But usually 120B/llama70b are good at following tag instructions.
+        // Check for Tool Calls
+        if (choice?.message?.tool_calls && choice.message.tool_calls.length > 0) {
+            const tc = choice.message.tool_calls[0];
+            if (tc.function) {
+                console.log(`[Groq] Tool Call Detected: ${tc.function.name}`);
+                try {
+                    toolCall = {
+                        name: tc.function.name,
+                        args: JSON.parse(tc.function.arguments)
+                    };
+                    // If there is no content, use a placeholder so the UI shows something while executing
+                    if (!text) text = `Requesting to execute tool: ${tc.function.name}...`;
+                } catch (e) {
+                    console.error("Failed to parse Groq tool arguments:", e);
+                }
+            }
         }
 
-        // Groq currently doesn't support Search Grounding like Gemini (entryPoint/chunks)
-        // We return undefined for sources/html to safely degrade the UI.
+        if (!text && !toolCall) {
+            text = "No response received from Groq agent.";
+        }
+
+        // CLEANUP: Extract final answer by removing <thought> blocks
+        if (isThinking && text) {
+            console.log("Processing thinking output...");
+            text = text.replace(/<(thought|THOUGHT)>[\s\S]*?<\/(thought|THOUGHT)>/gi, '').trim();
+        }
 
         return {
             text,
             sources: searchSources.length > 0 ? searchSources : undefined,
-            searchEntryPointHtml: undefined
+            searchEntryPointHtml: undefined,
+            toolCall: toolCall
         };
 
     } catch (error: any) {
