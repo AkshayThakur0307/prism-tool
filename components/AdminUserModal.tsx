@@ -393,11 +393,11 @@ const AdminUserModal: React.FC<AdminUserModalProps> = ({ isOpen, onClose }) => {
                             <div className="bg-slate-950 rounded-xl border border-slate-800">
                                 <table className="w-full text-left border-collapse">
                                     <thead>
-                                        <tr className="bg-slate-900 text-xs font-black uppercase tracking-widest text-slate-400 border-b border-slate-800 sticky top-0 z-10 shadow-sm">
-                                            <th className="p-4 w-1/3 bg-slate-900">Feature Capability</th>
+                                        <tr className="bg-slate-900 text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-800 sticky top-0 z-10 shadow-sm">
+                                            <th className="px-4 py-3 w-1/3 bg-slate-900">Feature Capability</th>
                                             {ROLES.map(role => (
-                                                <th key={role} className="p-4 text-center border-l border-slate-800/50 bg-slate-900">
-                                                    <span className={`px-2 py-1 rounded
+                                                <th key={role} className="px-4 py-3 text-center border-l border-slate-800/50 bg-slate-900">
+                                                    <span className={`px-2 py-0.5 rounded text-[10px]
                                                         ${role === 'admin' ? 'text-rose-400 bg-rose-500/10' :
                                                             role === 'pro' ? 'text-amber-400 bg-amber-500/10' :
                                                                 role === 'standard' ? 'text-indigo-400 bg-indigo-500/10' :
@@ -416,17 +416,17 @@ const AdminUserModal: React.FC<AdminUserModalProps> = ({ isOpen, onClose }) => {
 
                                             return (
                                                 <tr key={featureKey} className="hover:bg-slate-900/40 transition-colors">
-                                                    <td className="p-4">
-                                                        <p className="text-sm font-bold text-slate-200">{def.label}</p>
-                                                        <p className="text-[10px] text-slate-500 font-mono mt-0.5">{featureKey}</p>
+                                                    <td className="px-4 py-2.5">
+                                                        <p className="text-xs font-bold text-slate-200">{def.label}</p>
+                                                        <p className="text-[9px] text-slate-500 font-mono mt-0.5">{featureKey}</p>
                                                     </td>
                                                     {ROLES.map(role => {
                                                         const isEnabled = accessList.includes(role);
                                                         const isDisabled = role === 'admin'; // Admin always enabled by lock policy (visual logic)
 
                                                         return (
-                                                            <td key={role} className="p-4 text-center border-l border-slate-800/50">
-                                                                <label className={`relative inline-flex items-center justify-center w-5 h-5 cursor-pointer ${role === 'admin' ? 'cursor-not-allowed opacity-50' : ''}`}>
+                                                            <td key={role} className="px-4 py-2.5 text-center border-l border-slate-800/50">
+                                                                <label className={`relative inline-flex items-center justify-center w-4 h-4 cursor-pointer ${role === 'admin' ? 'cursor-not-allowed opacity-50' : ''}`}>
                                                                     <input
                                                                         type="checkbox"
                                                                         checked={isEnabled}
@@ -434,12 +434,12 @@ const AdminUserModal: React.FC<AdminUserModalProps> = ({ isOpen, onClose }) => {
                                                                         onChange={() => handlePermissionToggle(featureKey, role)}
                                                                         className="peer sr-only"
                                                                     />
-                                                                    <div className={`w-5 h-5 rounded border transition-all flex items-center justify-center
+                                                                    <div className={`w-4 h-4 rounded-[3px] border transition-all flex items-center justify-center
                                                                         ${isEnabled
                                                                             ? 'bg-indigo-500 border-indigo-500 text-white'
                                                                             : 'bg-slate-900 border-slate-600 hover:border-slate-500'}
                                                                     `}>
-                                                                        {isEnabled && <i className="fas fa-check text-[10px]"></i>}
+                                                                        {isEnabled && <i className="fas fa-check text-[9px]"></i>}
                                                                     </div>
                                                                 </label>
                                                             </td>
