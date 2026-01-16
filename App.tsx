@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { RAGControlPanel } from './components/RAGControlPanel';
 import { InstructionEditModal } from './components/InstructionEditModal';
 import { DiscoveryStage, AppState, FileContext, VoiceState, Project, ProjectMetadata, StageVersion, GroundingSource } from './types';
 import { STAGE_CONFIGS } from './constants';
@@ -844,7 +845,8 @@ When using Google Search:
           selectedModel, // Pass the specific override
           undefined,    // tools
           effectiveTemp, // Pass configured temperature
-          effectiveTopP // Pass configured TopP
+          effectiveTopP, // Pass configured TopP
+          currentStageData.enabledNamespaces || [] // Pass Enabled RAG Namespaces
         );
       }
 
@@ -2051,6 +2053,30 @@ When using Google Search:
                       </button>
                     </div>
                   </div>
+
+                  <RAGControlPanel
+                    currentStage={state.currentStage}
+                    enabledNamespaces={currentStageData.enabledNamespaces || []}
+                    onToggle={(ns) => {
+                      setState(prev => {
+                        const currentSettings = prev.stages[prev.currentStage].enabledNamespaces || [];
+                        const newSettings = currentSettings.includes(ns)
+                          ? currentSettings.filter(k => k !== ns)
+                          : [...currentSettings, ns];
+
+                        return {
+                          ...prev,
+                          stages: {
+                            ...prev.stages,
+                            [prev.currentStage]: {
+                              ...prev.stages[prev.currentStage],
+                              enabledNamespaces: newSettings
+                            }
+                          }
+                        };
+                      });
+                    }}
+                  />
 
                   <div className="relative">
                     <textarea

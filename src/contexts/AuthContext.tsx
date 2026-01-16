@@ -84,6 +84,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const signInWithGoogle = async () => {
         const provider = new GoogleAuthProvider();
+
+        // ENTERPRISE: Restrict to Org Domain if configured
+        const orgDomain = import.meta.env.VITE_ORG_DOMAIN;
+        if (orgDomain) {
+            provider.setCustomParameters({ hd: orgDomain });
+        }
+
         try {
             await signInWithPopup(auth, provider);
         } catch (error) {

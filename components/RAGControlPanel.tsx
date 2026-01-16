@@ -1,0 +1,88 @@
+
+import React from 'react';
+import { DiscoveryStage, VectorNamespace, AppState } from '../types';
+
+interface RAGControlPanelProps {
+    currentStage: DiscoveryStage;
+    enabledNamespaces: VectorNamespace[];
+    onToggle: (namespace: VectorNamespace) => void;
+}
+
+const AVAILABLE_NAMESPACES: { id: VectorNamespace; label: string; icon: string; description: string }[] = [
+    {
+        id: 'market-intelligence',
+        label: 'Market Intel',
+        icon: 'fa-globe',
+        description: 'Competitor reports & industry trends'
+    },
+    {
+        id: 'corp-strategy',
+        label: 'Strategy Docs',
+        icon: 'fa-chess',
+        description: 'OKRs, Board Decks & Mission'
+    },
+    {
+        id: 'jira-history',
+        label: 'Jira History',
+        icon: 'fa-history',
+        description: 'Past Epics & Stories'
+    },
+    {
+        id: 'data-dictionary',
+        label: 'Data Dict',
+        icon: 'fa-database',
+        description: 'Metric definitions & Schemas'
+    }
+];
+
+export const RAGControlPanel: React.FC<RAGControlPanelProps> = ({ currentStage, enabledNamespaces, onToggle }) => {
+    return (
+        <div className="bg-slate-900/50 rounded-xl border border-slate-700/50 p-3 mb-4">
+            <div className="flex items-center gap-2 mb-3">
+                <div className="w-6 h-6 rounded-lg bg-indigo-500/20 flex items-center justify-center">
+                    <i className="fas fa-network-wired text-indigo-400 text-xs"></i>
+                </div>
+                <div>
+                    <h3 className="text-xs font-bold text-indigo-100 uppercase tracking-wider">Enterprise Context (RAG)</h3>
+                    <p className="text-[10px] text-slate-400">Select knowledge bases to ground the AI response</p>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+                {AVAILABLE_NAMESPACES.map((ns) => {
+                    const isActive = enabledNamespaces.includes(ns.id);
+                    return (
+                        <button
+                            key={ns.id}
+                            onClick={() => onToggle(ns.id)}
+                            className={`
+                group relative flex items-start gap-2 p-2 rounded-lg border text-left transition-all duration-200
+                ${isActive
+                                    ? 'bg-indigo-500/10 border-indigo-500/50 shadow-[0_0_10px_-3px_rgba(99,102,241,0.3)]'
+                                    : 'bg-slate-800/30 border-slate-700/30 hover:bg-slate-800/50 hover:border-slate-600'}
+              `}
+                        >
+                            <div className={`
+                mt-0.5 w-4 h-4 rounded flex items-center justify-center text-[10px] transition-colors
+                ${isActive ? 'bg-indigo-500 text-white' : 'bg-slate-700 text-slate-400 group-hover:bg-slate-600'}
+              `}>
+                                <i className={`fas ${ns.icon}`}></i>
+                            </div>
+                            <div>
+                                <div className={`text-[11px] font-medium leading-none mb-1 ${isActive ? 'text-indigo-200' : 'text-slate-300'}`}>
+                                    {ns.label}
+                                </div>
+                                <div className="text-[9px] text-slate-500 leading-tight">
+                                    {ns.description}
+                                </div>
+                            </div>
+
+                            {/* Toggle Indicator */}
+                            <div className={`absolute top-2 right-2 w-2 h-2 rounded-full ${isActive ? 'bg-indigo-400 shadow-[0_0_5px_rgba(129,140,248,0.8)]' : 'bg-slate-700'}`}></div>
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};

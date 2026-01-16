@@ -1,12 +1,9 @@
-
 import { GoogleGenAI } from "@google/genai";
-import { FileContext, GroundingSource } from "../types";
+import { searchPinecone } from "./pineconeService";
+import { FileContext, GroundingSource, VectorNamespace } from "../types";
 import { searchGoogle } from "./searchService";
 import { callGroqAgent } from "./groqService";
 import { GeminiCapability, getModelForCapability, GEMINI_MODELS } from "./modelConfig";
-
-// Checking line 1: import { GoogleGenAI } from "@google/genai";
-// I will just use the correct import line.
 
 export interface GeminiAgentResponse {
   text: string;
@@ -29,7 +26,8 @@ export async function callGeminiAgent(
   modelOverride?: string, // Optional override for manual selection
   tools?: any[], // Support generic tools
   temperature?: number, // Optional temperature override
-  topP?: number // Optional topP override
+  topP?: number, // Optional topP override
+  enabledNamespaces: VectorNamespace[] = [] // NEW: RAG Namespaces
 ): Promise<GeminiAgentResponse> {
   const hasMultimodal = contextFiles.some(f => f.mimeType.startsWith('image/') || f.mimeType.startsWith('video/') || f.mimeType.startsWith('audio/') || f.mimeType === 'application/pdf');
 
@@ -60,10 +58,44 @@ export async function callGeminiAgent(
     console.error("Gemini API Key is missing! Please set API_KEY, NEXT_PUBLIC_GEMINI_API_KEY, or VITE_GEMINI_API_KEY.");
   }
 
+  // ENTERPRISE RAG: Real Context Injection
+  // We construct an 'effectivePrompt' so that the RAG context is available to BOTH Gemini and the Groq failover.
+  let effectivePrompt = userPrompt;
+
+  if (enabledNamespaces && enabledNamespaces.length > 0) {
+    console.log(`[RAG] Processing ${enabledNamespaces.length} active namespaces:`, enabledNamespaces);
+
+    // Iterate through all enabled namespaces and fetch context
+    const ragPromises = enabledNamespaces.map(async (ns) => {
+      try {
+        const context = await searchPinecone(ns, userPrompt);
+        if (context) {
+          return `=== CONTEXT FROM ${ns.toUpperCase()} ===\n${context}\n====================`;
+        }
+      } catch (e) {
+        console.error(`[RAG] Failed to fetch from ${ns}:`, e);
+      }
+      return null;
+    });
+
+    const ragResults = await Promise.all(ragPromises);
+    const combinedContext = ragResults.filter(Boolean).join('\n\n');
+
+    if (combinedContext) {
+      effectivePrompt = `
+${combinedContext}
+
+=== ACTIVE USER PROMPT ===
+${userPrompt}
+`;
+      console.log("[RAG] Injected combined context into effective prompt.");
+    }
+  }
+
   const ai = new GoogleGenAI({ apiKey: apiKey || '' });
 
-  // Prepare Content Parts
-  const parts: any[] = [{ text: userPrompt }];
+  // Prepare Content Parts using the Enhanced Prompt
+  const parts: any[] = [{ text: effectivePrompt }];
 
   // Handle multimodal context (Images, PDFs, and Videos)
   // hasMultimodal is already calculated at the top
@@ -122,6 +154,7 @@ export async function callGeminiAgent(
     }
 
     console.log(`[Gemini] Calling model ${modelToUse} (Thinking: ${isThinking}, Search: ${useSearch}, Tools: ${tools?.length})...`);
+    console.log(`[Gemini] Effective Prompt Preview: ${effectivePrompt.substring(0, 100)}...`);
 
     // DEBUG TOOL STRUCTURE
     if (config.tools) {
@@ -146,8 +179,8 @@ export async function callGeminiAgent(
       // Smart Query Extraction: Attempt to parse the "Active Input" from the prompt structure
       // Matches the format defined in App.tsx runAnalysis
       // Smart Query Extraction: parse Active Input and Module Context
-      const activeInputMatch = userPrompt.match(/=== ACTIVE TASK INPUT \(FOCUS HERE\) ===\n"([\s\S]*?)"\n======================================/);
-      const moduleContextMatch = userPrompt.match(/=== MODULE CONTEXT \(USE FOR SEARCH RELEVANCE\) ===\n([\s\S]*?)\n=================================================/);
+      const activeInputMatch = effectivePrompt.match(/=== ACTIVE TASK INPUT \(FOCUS HERE\) ===\n"([\s\S]*?)"\n======================================/);
+      const moduleContextMatch = effectivePrompt.match(/=== MODULE CONTEXT \(USE FOR SEARCH RELEVANCE\) ===\n([\s\S]*?)\n=================================================/);
 
       const cleanInput = activeInputMatch ? activeInputMatch[1].trim() : null;
       const contextInfo = moduleContextMatch ? moduleContextMatch[1].replace(/Stage:|Company:|Vertical:/g, '').replace(/\n/g, ' ').trim() : '';
@@ -155,8 +188,8 @@ export async function callGeminiAgent(
       // Fallback: Use the whole prompt only if it's short, otherwise skip
       let query = cleanInput;
       if (!query) {
-        if (userPrompt.length < 200) {
-          query = userPrompt;
+        if (effectivePrompt.length < 200) {
+          query = effectivePrompt;
         } else {
           console.warn("[Gemini] Could not extract active input for search. Skipping Serper failover to avoid irrelevant queries.");
           query = null;
@@ -286,7 +319,7 @@ ${serperResults.text}
       const groqResponse = await callGroqAgent(
         modelOverride || 'llama-3.3-70b-versatile', // Default mapped inside
         systemInstruction,
-        userPrompt,
+        effectivePrompt, // USE effectivePrompt HERE to include RAG context!
         contextFiles,
         isThinking,
         useSearch,

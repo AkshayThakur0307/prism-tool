@@ -55,7 +55,11 @@ export interface StageData {
   versions: StageVersion[];
   coherenceScore: number;
   estimationSheetData?: any; // JSON string or object for spreadsheet state
+  enabledNamespaces?: VectorNamespace[]; // RAG: Active Pinecone namespaces for this stage
 }
+
+// RAG / Vector Search Namespaces
+export type VectorNamespace = 'market-intelligence' | 'jira-history' | 'tech-docs' | 'corp-strategy' | 'data-dictionary';
 
 export interface ProjectSettings {
   isThinkingEnabled: boolean;
@@ -63,6 +67,10 @@ export interface ProjectSettings {
   thinkingTopP?: number; // Optional 0.0 - 1.0
   isSearchEnabled: boolean;
 }
+
+// Stage-specific RAG Settings (Extension to StageData)
+// Note: We'll add this to StageData interface below
+
 
 export interface AppState {
   currentStage: DiscoveryStage;
