@@ -850,47 +850,47 @@ When using Google Search:
 
       const finalCoherence = calculateCoherenceScore();
 
-      setAnalyzingStage(current => {
-        if (current === targetStage) {
-          const questions = parseQuestions(result.text);
-          setState(prev => {
-            const oldData = prev.stages[targetStage];
-            const newVersion: StageVersion = {
-              id: crypto.randomUUID(),
-              timestamp: Date.now(),
-              output: result.text,
-              input: oldData.input,
-              questions: questions,
-              coherenceScore: finalCoherence,
-              searchEntryPointHtml: result.searchEntryPointHtml
-            };
+      // Update State Directly (User is blocked by full-screen loader, so race conditions are minimal)
+      const questions = parseQuestions(result.text);
 
-            return {
-              ...prev,
-              stages: {
-                ...prev.stages,
-                [targetStage]: {
-                  ...oldData,
-                  output: result.text,
-                  status: 'completed',
-                  questions,
-                  groundingSources: result.sources,
-                  searchEntryPointHtml: result.searchEntryPointHtml,
-                  coherenceScore: finalCoherence,
-                  versions: [newVersion, ...(oldData.versions || [])].slice(0, 10) // Keep last 10
-                }
-              }
-            };
-          });
-          return null;
-        }
-        return current;
+      setState(prev => {
+        // Double check we haven't somehow switched stages (unlikely with modal blocker)
+        if (prev.currentStage !== targetStage) return prev;
+
+        const oldData = prev.stages[targetStage];
+        const newVersion: StageVersion = {
+          id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          output: result.text,
+          input: oldData.input,
+          questions: questions,
+          coherenceScore: finalCoherence,
+          searchEntryPointHtml: result.searchEntryPointHtml
+        };
+
+        return {
+          ...prev,
+          stages: {
+            ...prev.stages,
+            [targetStage]: {
+              ...oldData,
+              output: result.text,
+              status: 'completed',
+              questions,
+              groundingSources: result.sources,
+              searchEntryPointHtml: result.searchEntryPointHtml,
+              coherenceScore: finalCoherence,
+              versions: [newVersion, ...(oldData.versions || [])].slice(0, 10) // Keep last 10
+            }
+          }
+        };
       });
+
     } catch (err) {
       console.error(err);
       alert("Analysis encountered a snag. Retrying often helps.");
     } finally {
-      setAnalyzingStage(current => current === targetStage ? null : current);
+      setAnalyzingStage(null);
     }
   };
 
