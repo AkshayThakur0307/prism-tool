@@ -23,19 +23,41 @@ const getClient = () => {
 // This assumes vectors in Pinecone were generated using "text-embedding-004" model
 // access to embedding model via @google/genai requires the same key
 import { GoogleGenAI } from "@google/genai";
-const genAI = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY || '' });
+
+const apiKeyGemini = import.meta.env.VITE_GEMINI_API_KEY;
+if (!apiKeyGemini) {
+    console.warn("[Pinecone] VITE_GEMINI_API_KEY appears missing/empty during import.");
+}
+const genAI = new GoogleGenAI({ apiKey: apiKeyGemini || '' });
 
 async function getEmbedding(text: string): Promise<number[]> {
     try {
+        console.log(`[Pinecone] Requesting embedding for text length: ${text.length}`);
+
         const result = await genAI.models.embedContent({
             model: "text-embedding-004",
             contents: [{ parts: [{ text: text }] }]
         });
 
-        // Check for different response structures just in case
-        return (result as any).embedding?.values || (result as any).values || [];
-    } catch (e) {
-        console.error("Embedding generation failed:", e);
+        console.log("[Pinecone] Embedding response received:", result);
+
+        // Handle various response shapes
+        // @google/genai v1+ response typically has .embeddings[0].values or similar
+        // We probe multiple paths to be safe
+        const values = (result as any).embedding?.values ||
+            (result as any).values ||
+            (result as any).embeddings?.[0]?.values;
+
+        if (!values) {
+            console.error("[Pinecone] Embedding response structure unexpected:", JSON.stringify(result));
+            return [];
+        }
+
+        return values;
+    } catch (e: any) {
+        console.error("[Pinecone] Embedding generation failed with error:", e);
+        if (e.message) console.error("[Pinecone] Error Message:", e.message);
+        if (e.response) console.error("[Pinecone] Error Response:", e.response);
         return [];
     }
 }
