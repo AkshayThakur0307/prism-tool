@@ -56,6 +56,9 @@ export interface StageData {
   coherenceScore: number;
   estimationSheetData?: any; // JSON string or object for spreadsheet state
   enabledNamespaces?: VectorNamespace[]; // RAG: Active Pinecone namespaces for this stage
+  isFigmaEnabled?: boolean; // Toggle state
+  figmaConfig?: { accessToken: string; fileKey: string }; // Connection details
+  figmaData?: any; // The raw or summarized Figma response captured for this stage
 }
 
 // RAG / Vector Search Namespaces

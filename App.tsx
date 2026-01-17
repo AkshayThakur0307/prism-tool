@@ -10,6 +10,7 @@ import { createDefaultProjectState } from './services/projectService';
 import { GeminiCapability } from './services/modelConfig';
 import { scrapeUrl } from './services/webScraper';
 import { jiraService } from './services/jiraService';
+import { figmaService } from './services/figmaService'; // Import figmaService
 import { createLiveAssistant } from './services/liveService';
 import { HybridVoiceAssistant } from './services/groqVoiceService';
 import { VoiceInputTrigger } from './components/VoiceInputTrigger';
@@ -20,6 +21,7 @@ import PresentationView from './components/PresentationView';
 import ChatBot from './components/ChatBot';
 import ProductManual from './components/ProductManual';
 import ProjectListModal from './components/ProjectListModal';
+import FigmaConfigModal from './components/FigmaConfigModal';
 import { marked } from 'marked';
 import { useAuth } from './src/contexts/AuthContext';
 import { useRBAC } from './src/hooks/useRBAC';
@@ -165,11 +167,21 @@ const App: React.FC = () => {
       // Let's modify loadProject to set a local ref or state. 
     });
 
-    // Set custom instructions into state (See next Edit to AppState definition)
+    // Set custom instructions into state
     if (project.customInstructions) {
       setCustomInstructions(project.customInstructions);
     } else {
       setCustomInstructions({});
+    }
+
+    // Restore Figma State (Epics Stage)
+    const epicsStage = project.stages[DiscoveryStage.EPICS];
+    if (epicsStage && epicsStage.figmaConfig) {
+      setFigmaConfig(epicsStage.figmaConfig);
+      setIsFigmaEpicsEnabled(!!epicsStage.isFigmaEnabled);
+    } else {
+      setIsFigmaEpicsEnabled(false);
+      // Keep env defaults if nothing saved
     }
 
     setShowProjectList(false);
@@ -246,6 +258,29 @@ const App: React.FC = () => {
     apiToken: (process.env as any).VITE_JIRA_API_TOKEN || '',
     projectKey: (process.env as any).VITE_JIRA_PROJECT_KEY || ''
   });
+
+  // Figma Epics State
+  const [isFigmaEpicsEnabled, setIsFigmaEpicsEnabled] = useState(false);
+  const [showFigmaConfig, setShowFigmaConfig] = useState(false);
+  const [figmaConfig, setFigmaConfig] = useState<{ accessToken: string, fileKey: string }>({
+    accessToken: (process.env as any).VITE_FIGMA_ACCESS_TOKEN || '',
+    fileKey: (process.env as any).VITE_FIGMA_FILE_KEY || ''
+  });
+
+  // Sync Figma State to AppState (Persistence)
+  useEffect(() => {
+    setState(prev => ({
+      ...prev,
+      stages: {
+        ...prev.stages,
+        [DiscoveryStage.EPICS]: {
+          ...prev.stages[DiscoveryStage.EPICS],
+          isFigmaEnabled: isFigmaEpicsEnabled,
+          figmaConfig: figmaConfig
+        }
+      }
+    }));
+  }, [isFigmaEpicsEnabled, figmaConfig]);
 
   // Output Editing & Refinement
   const [isEditingOutput, setIsEditingOutput] = useState(false);
@@ -791,6 +826,42 @@ When using Google Search:
         finalUserPrompt += `\n\n=== SCRAPED WEB CONTENT ===\n${scrapedResults.join('\n\n----------------\n\n')}\n===========================`;
       }
 
+      // --- FIGMA INJECTION (for Epics Stage) ---
+      let figmaCapture: any = null; // Captured for DB persistence
+
+      if (isFigmaEpicsEnabled && figmaConfig.accessToken && figmaConfig.fileKey) {
+        setToast({ message: "Fetching Figma design context...", type: 'info' });
+        console.log("Fetching Figma context...");
+        try {
+          const [fileData, commentsData] = await Promise.all([
+            figmaService.getFile({ accessToken: figmaConfig.accessToken }, figmaConfig.fileKey),
+            figmaService.getComments({ accessToken: figmaConfig.accessToken }, figmaConfig.fileKey)
+          ]);
+
+          // Capture for DB
+          figmaCapture = { file: fileData, comments: commentsData };
+
+          const figmaContext = `
+=== DESIGN CONTEXT (FROM FIGMA) ===
+File Name: ${fileData.name}
+Last Modified: ${fileData.lastModified}
+
+STRUCTURE SUMMARY (Pages & Frames):
+${JSON.stringify(fileData.structure, null, 2)}
+
+DESIGN COMMENTS (Relevant Discussions):
+${commentsData.map((c: any) => `- [${c.user}]: ${c.message} (${c.resolved ? 'Resolved' : 'Active'})`).join('\n')}
+===================================
+          `;
+          finalUserPrompt += figmaContext;
+          console.log("Figma context injected.");
+        } catch (err: any) {
+          console.error("Figma Fetch Error:", err);
+          setToast({ message: `Figma Error: ${err.message}`, type: 'error' });
+          // We continue without Figma context rather than failing the whole run
+        }
+      }
+
       let result;
 
       // Resolve AI Settings with defaults
@@ -882,7 +953,13 @@ When using Google Search:
               groundingSources: result.sources,
               searchEntryPointHtml: result.searchEntryPointHtml,
               coherenceScore: finalCoherence,
-              versions: [newVersion, ...(oldData.versions || [])].slice(0, 10) // Keep last 10
+              versions: [newVersion, ...(oldData.versions || [])].slice(0, 10), // Keep last 10
+              // Persist Figma Data (New)
+              figmaData: figmaCapture || oldData.figmaData // Keep old capture if this run didn't fetch new one, or clear?
+              // Usually if disabled, figmaCapture is null. 
+              // Let's rely on figmaCapture if fetched, else keep old.
+              // If explicitly disabled, maybe we should verify logic.
+              // But for now, updating with fresh capture is key.
             }
           }
         };
@@ -2369,6 +2446,52 @@ When using Google Search:
                         {!canUseAdvancedAI && <i className="fas fa-lock text-amber-500 text-xs absolute -left-5"></i>}
                       </label>
                     </div>
+
+                    {/* Figma Context Toggle (Epics Stage) - Below Grounding */}
+                    {state.currentStage === DiscoveryStage.EPICS && (
+                      <div className="flex items-center justify-between p-3 rounded-2xl bg-purple-900/10 border border-purple-500/20 transition-all hover:bg-purple-900/20 mt-3">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${isFigmaEpicsEnabled ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-500'}`}>
+                            <i className="fab fa-figma text-xs"></i>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-wider text-white leading-none">Figma Context</p>
+                            <p className="text-[8px] text-slate-500 mt-1 uppercase font-bold tracking-widest">{isFigmaEpicsEnabled ? 'Design Data Active' : 'Link Design Params'}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {/* Config Gear - Only visible when enabled */}
+                          {isFigmaEpicsEnabled && (
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setShowFigmaConfig(true);
+                              }}
+                              className="w-6 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-500 hover:text-white flex items-center justify-center transition-colors border border-slate-700 hover:border-slate-500"
+                              title="Update Figma Connection"
+                            >
+                              <i className="fas fa-cog text-[10px]"></i>
+                            </button>
+                          )}
+                          <label className="relative inline-flex items-center cursor-pointer group/lock">
+                            <input
+                              type="checkbox"
+                              className="sr-only peer"
+                              checked={isFigmaEpicsEnabled}
+                              onChange={() => {
+                                const nextState = !isFigmaEpicsEnabled;
+                                if (nextState && (!figmaConfig.accessToken || !figmaConfig.fileKey)) {
+                                  setShowFigmaConfig(true);
+                                } else {
+                                  setIsFigmaEpicsEnabled(nextState);
+                                }
+                              }}
+                            />
+                            <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                          </label>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {!currentStageData.output && (
@@ -2546,6 +2669,8 @@ When using Google Search:
                           <ModelSelector value={selectedModel} onChange={setSelectedModel} className="w-48" />
                         </div>
                       </div>
+
+
 
                       <button
                         onClick={runAnalysis}
@@ -3409,6 +3534,25 @@ When using Google Search:
           />
         )
       }
+
+      {/* Figma Config Modal (Epics Stage) */}
+      <FigmaConfigModal
+        isOpen={showFigmaConfig}
+        onClose={() => {
+          setShowFigmaConfig(false);
+          // If closed without confirm and inputs are empty, disable toggle
+          if (!figmaConfig.accessToken || !figmaConfig.fileKey) {
+            setIsFigmaEpicsEnabled(false);
+          }
+        }}
+        onConfirm={(token, key) => {
+          setFigmaConfig({ accessToken: token, fileKey: key });
+          setIsFigmaEpicsEnabled(true);
+          setShowFigmaConfig(false);
+        }}
+        initialAccessToken={figmaConfig.accessToken}
+        initialFileKey={figmaConfig.fileKey}
+      />
 
       {/* ESTIMATION STUDIO FULL SCREEN OVERLAY */}
       {

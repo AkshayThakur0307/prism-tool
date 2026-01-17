@@ -52,8 +52,28 @@ export const figmaService = {
             type: node.type
         };
 
+        // Capture text content
         if (node.type === 'TEXT' && node.characters) {
             summary.characters = node.characters;
+        }
+
+        // Capture Component Instance properties
+        if (node.componentProperties) {
+            summary.componentProperties = {};
+            // console.log(`[Figma] Processing props for ${node.name}`, node.componentProperties);
+
+            for (const [key, value] of Object.entries(node.componentProperties)) {
+                // Clean the key (remove internal Figma IDs like #12:34)
+                const cleanKey = key.split('#')[0];
+
+                // Determine the actual value
+                const propVal: any = value;
+                if (propVal?.value !== undefined) {
+                    summary.componentProperties[cleanKey] = propVal.value;
+                } else {
+                    summary.componentProperties[cleanKey] = propVal;
+                }
+            }
         }
 
         if (node.children) {
