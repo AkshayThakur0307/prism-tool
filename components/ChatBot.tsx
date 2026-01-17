@@ -6,8 +6,10 @@ import MarkdownRenderer from './MarkdownRenderer';
 import { STAGE_CONFIGS } from '../constants';
 import ConfirmationModal from './common/ConfirmationModal';
 import FigmaConfigModal from './FigmaConfigModal';
+import JiraConfigModal from './JiraConfigModal';
 import { JIRA_TOOLS, jiraAgent } from '../services/jiraAgent';
 import { FIGMA_TOOLS, figmaAgent } from '../services/figmaAgent';
+import { useRBAC } from '../src/hooks/useRBAC';
 
 interface Message {
   role: 'user' | 'assistant' | 'tool';
@@ -19,6 +21,7 @@ interface ChatBotProps {
 }
 
 const ChatBot: React.FC<ChatBotProps> = ({ appState }) => {
+  const { canUseFigma } = useRBAC();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     { role: 'assistant', content: "Hello! I'm your Discovery Assistant. I'm currently tracking your progress in **" + STAGE_CONFIGS[appState.currentStage].title + "**. How can I help?" }
@@ -29,8 +32,15 @@ const ChatBot: React.FC<ChatBotProps> = ({ appState }) => {
   const lastStageRef = useRef<DiscoveryStage>(appState.currentStage);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
-  // Agent Modes
+  // Jira State
   const [isJiraMode, setIsJiraMode] = useState(false);
+  const [showJiraModal, setShowJiraModal] = useState(false);
+  const [jiraConfig, setJiraConfig] = useState<{ domain: string; email: string; apiToken: string; projectKey: string }>({
+    domain: (import.meta.env.VITE_JIRA_DOMAIN as string) || '',
+    email: (import.meta.env.VITE_JIRA_EMAIL as string) || '',
+    apiToken: (import.meta.env.VITE_JIRA_API_TOKEN as string) || '',
+    projectKey: (import.meta.env.VITE_JIRA_PROJECT_KEY as string) || ''
+  });
 
   // Figma State
   const [isFigmaMode, setIsFigmaMode] = useState(false);
@@ -47,7 +57,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ appState }) => {
 
   // Only allow Jira Mode in EPICS stage (Legacy rule, maybe relax?)
   const canUseJiraAgent = appState.currentStage === DiscoveryStage.EPICS;
-  const canUseFigmaAgent = true;
+  const canUseFigmaAgent = canUseFigma;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -97,6 +107,22 @@ const ChatBot: React.FC<ChatBotProps> = ({ appState }) => {
     setShowClearConfirm(false);
   };
 
+  // --- JIRA HANDLERS ---
+  const handleJiraToggle = () => {
+    if (isJiraMode) {
+      setIsJiraMode(false);
+    } else {
+      setShowJiraModal(true);
+    }
+  };
+
+  const handleJiraConfigConfirm = (domain: string, email: string, apiToken: string, projectKey: string) => {
+    setJiraConfig({ domain, email, apiToken, projectKey });
+    setIsJiraMode(true);
+    setShowJiraModal(false);
+    setMessages(prev => [...prev, { role: 'assistant', content: `🛠️ **Jira Agent Enabled**\nConnected to project **${projectKey}** at ${domain}.` }]);
+  };
+
   // --- FIGMA HANDLERS ---
   const handleFigmaToggle = () => {
     if (isFigmaMode) {
@@ -126,14 +152,14 @@ const ChatBot: React.FC<ChatBotProps> = ({ appState }) => {
     // JIRA EXECUTION
     if (toolCall.name.startsWith('jira_') || toolCall.name.startsWith('create_') || toolCall.name.startsWith('delete_') || toolCall.name === 'get_issue' || toolCall.name === 'search_issues' || toolCall.name === 'update_issue' || toolCall.name === 'get_transitions' || toolCall.name === 'transition_issue') {
       const config = {
-        projectKey: (import.meta.env.VITE_JIRA_PROJECT_KEY as string) || (process.env.VITE_JIRA_PROJECT_KEY as string) || '',
-        email: (import.meta.env.VITE_JIRA_EMAIL as string) || (process.env.VITE_JIRA_EMAIL as string) || '',
-        apiToken: (import.meta.env.VITE_JIRA_API_TOKEN as string) || (process.env.VITE_JIRA_API_TOKEN as string) || '',
-        domain: (import.meta.env.VITE_JIRA_DOMAIN as string) || (process.env.VITE_JIRA_DOMAIN as string) || ''
+        projectKey: jiraConfig.projectKey,
+        email: jiraConfig.email,
+        apiToken: jiraConfig.apiToken,
+        domain: jiraConfig.domain
       };
 
       if (!config.apiToken && isJiraMode) {
-        return "Error: Jira API Tool is missing from environment. Please check VITE_JIRA_API_TOKEN.";
+        return "Error: Jira Credentials missing. Please re-enable Jira Agent.";
       }
 
       // Intercept DELETE for manual confirmation
@@ -169,10 +195,10 @@ const ChatBot: React.FC<ChatBotProps> = ({ appState }) => {
     if (pendingToolCall) {
       setIsTyping(true);
       const config = {
-        projectKey: (import.meta.env.VITE_JIRA_PROJECT_KEY as string) || '',
-        email: (import.meta.env.VITE_JIRA_EMAIL as string) || '',
-        apiToken: (import.meta.env.VITE_JIRA_API_TOKEN as string) || '',
-        domain: (import.meta.env.VITE_JIRA_DOMAIN as string) || ''
+        projectKey: jiraConfig.projectKey,
+        email: jiraConfig.email,
+        apiToken: jiraConfig.apiToken,
+        domain: jiraConfig.domain
       };
       const result = await jiraAgent.executeJiraTool(pendingToolCall, config);
       setPendingToolCall(null);
@@ -314,6 +340,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ appState }) => {
             You have full authorization to manage Jira tickets.
             Capabilities: Create (Epic/Story/Task), Read, Update, Delete, Transition.
             Use 'search_issues' with JQL for finding tickets.
+            Your Project Key is: ${jiraConfig.projectKey}
           `;
       }
 
@@ -440,7 +467,7 @@ ${userMessage}
             {/* Jira Toggle */}
             {canUseJiraAgent && (
               <button
-                onClick={() => setIsJiraMode(!isJiraMode)}
+                onClick={handleJiraToggle}
                 className={`px-2.5 py-1 rounded-md border text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5
                         ${isJiraMode
                     ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/30'
@@ -491,7 +518,7 @@ ${userMessage}
         <div className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth">
           {messages.map((msg, idx) => (
             <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[88%] p-4 rounded-2xl text-[13px] leading-relaxed shadow-sm
+              <div className={`max-w-[88%] p-4 rounded-2xl text-[11.5px] leading-relaxed shadow-sm
                 ${msg.role === 'user'
                   ? 'bg-indigo-600 text-white rounded-br-none shadow-indigo-600/10'
                   : 'bg-slate-900/90 text-slate-200 border border-slate-800 rounded-bl-none shadow-black/20'}
@@ -571,6 +598,16 @@ ${userMessage}
         onConfirm={handleFigmaConfigConfirm}
         initialAccessToken={figmaConfig.accessToken}
         initialFileKey={figmaConfig.fileKey}
+      />
+
+      <JiraConfigModal
+        isOpen={showJiraModal}
+        onClose={() => setShowJiraModal(false)}
+        onConfirm={handleJiraConfigConfirm}
+        initialDomain={jiraConfig.domain}
+        initialEmail={jiraConfig.email}
+        initialApiToken={jiraConfig.apiToken}
+        initialProjectKey={jiraConfig.projectKey}
       />
     </div>
   );

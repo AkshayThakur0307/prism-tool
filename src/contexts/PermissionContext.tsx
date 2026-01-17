@@ -18,6 +18,7 @@ export const FEATURE_DEFINITIONS = {
     canShareProject: { label: 'Share Projects', default: ['pro', 'admin'] },
     canCustomizeInstructions: { label: 'Customize System Instructions', default: ['pro', 'admin'] },
     canUseEnterpriseRAG: { label: 'Enterprise RAG (Pinecone)', default: ['pro', 'admin'] },
+    canUseFigma: { label: 'Figma Integration', default: ['pro', 'admin'] },
 };
 
 export type FeatureKey = keyof typeof FEATURE_DEFINITIONS;

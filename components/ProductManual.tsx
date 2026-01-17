@@ -307,6 +307,18 @@ const ProductManual: React.FC<ProductManualProps> = ({ onClose }) => {
                     <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 text-[9px] font-bold border border-amber-500/20">PRO / ADMIN</span>
                   </div>
                 </div>
+
+                <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 hover:border-purple-500/30 transition-all">
+                  <h6 className="text-[12px] font-black text-white uppercase tracking-widest mb-2 flex items-center gap-2">
+                    <i className="fab fa-figma text-purple-500"></i> Figma Integration
+                  </h6>
+                  <p className="text-[11px] text-slate-400 leading-relaxed mb-3">
+                    Connects to your Figma account to analyze design files. Extracts page structure, comments, and visual hierarchy to align technical specs with design intent.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 text-[9px] font-bold border border-purple-500/20">PRO / ADMIN</span>
+                  </div>
+                </div>
               </div>
             </section>
 
@@ -452,6 +464,13 @@ const ProductManual: React.FC<ProductManualProps> = ({ onClose }) => {
                     </tr>
                     <tr className="border-b border-slate-800/50">
                       <td className="p-4 font-bold text-white">Refinement Studio</td>
+                      <td className="p-4 text-center"><i className="fas fa-times text-slate-700"></i></td>
+                      <td className="p-4 text-center"><i className="fas fa-lock text-slate-600"></i></td>
+                      <td className="p-4 text-center"><i className="fas fa-check text-emerald-500"></i></td>
+                      <td className="p-4 text-center"><i className="fas fa-check text-emerald-500"></i></td>
+                    </tr>
+                    <tr className="border-b border-slate-800/50">
+                      <td className="p-4 font-bold text-white">Figma Integration</td>
                       <td className="p-4 text-center"><i className="fas fa-times text-slate-700"></i></td>
                       <td className="p-4 text-center"><i className="fas fa-lock text-slate-600"></i></td>
                       <td className="p-4 text-center"><i className="fas fa-check text-emerald-500"></i></td>
