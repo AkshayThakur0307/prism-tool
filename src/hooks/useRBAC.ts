@@ -26,6 +26,7 @@ export const useRBAC = () => {
         canUseBasicAI: hasAccess('canUseBasicAI'),
         canUseAdvancedAI: hasAccess('canUseAdvancedAI'), // Thinking Mode, Research Grounding
         canCustomizeInstructions: hasAccess('canCustomizeInstructions'),
+        canUseEnterpriseRAG: hasAccess('canUseEnterpriseRAG'),
 
         // Export / Integrations
         canExportData: hasAccess('canExportData'),

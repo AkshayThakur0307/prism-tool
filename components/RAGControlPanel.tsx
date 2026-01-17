@@ -35,9 +35,26 @@ const AVAILABLE_NAMESPACES: { id: VectorNamespace; label: string; icon: string; 
     }
 ];
 
+import { useRBAC } from '../src/hooks/useRBAC';
+
 export const RAGControlPanel: React.FC<RAGControlPanelProps> = ({ currentStage, enabledNamespaces, onToggle }) => {
+    const { canUseEnterpriseRAG } = useRBAC();
+
     return (
-        <div className="bg-slate-900/50 rounded-xl border border-slate-700/50 p-3 mb-4">
+        <div className="bg-slate-900/50 rounded-xl border border-slate-700/50 p-3 mb-4 relative overflow-hidden">
+            {/* RBAC Lock Overlay */}
+            {!canUseEnterpriseRAG && (
+                <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-[1px] z-20 flex flex-col items-center justify-center text-center p-4 border border-indigo-500/20 rounded-xl">
+                    <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center mb-2 shadow-lg border border-slate-700">
+                        <i className="fas fa-lock text-amber-400 text-xs"></i>
+                    </div>
+                    <h4 className="text-xs font-semibold text-slate-200 mb-0.5">Enterprise Feature</h4>
+                    <p className="text-[10px] text-slate-400 max-w-[180px]">
+                        RAG Knowledge Base access is restricted to Pro & Admin users.
+                    </p>
+                </div>
+            )}
+
             <div className="flex items-center gap-2 mb-3">
                 <div className="w-6 h-6 rounded-lg bg-indigo-500/20 flex items-center justify-center">
                     <i className="fas fa-network-wired text-indigo-400 text-xs"></i>
@@ -48,7 +65,7 @@ export const RAGControlPanel: React.FC<RAGControlPanelProps> = ({ currentStage, 
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className={`grid grid-cols-2 gap-2 ${!canUseEnterpriseRAG ? 'opacity-20 pointer-events-none' : ''}`}>
                 {AVAILABLE_NAMESPACES.map((ns) => {
                     const isActive = enabledNamespaces.includes(ns.id);
                     return (

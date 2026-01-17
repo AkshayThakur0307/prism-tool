@@ -40,6 +40,7 @@ const ProductManual: React.FC<ProductManualProps> = ({ onClose }) => {
               { id: 'pm-intelligence', label: 'AI Controls' },
               { id: 'pm-interaction', label: 'User Interaction' },
               { id: 'pm-advanced_features', label: 'Advanced Features' },
+              { id: 'pm-productivity', label: 'Productivity Suite' },
               { id: 'pm-rbac_matrix', label: 'RBAC Matrix', colorClass: 'text-emerald-400 hover:text-emerald-300' }
             ].map(item => (
               <button
@@ -223,6 +224,18 @@ const ProductManual: React.FC<ProductManualProps> = ({ onClose }) => {
                     <p className="text-xs text-slate-400 mt-2 leading-relaxed font-medium">Integrates Google Search to validate market trends, competitor claims, and technical standards. Every generated fact is cross-referenced with live citations and source links.</p>
                   </div>
                 </div>
+
+                <div className="flex items-start gap-4 pt-4 border-t border-slate-800">
+                  <i className="fas fa-network-wired text-2xl text-emerald-500 mt-1"></i>
+                  <div>
+                    <h4 className="text-sm font-black text-white uppercase tracking-widest">Enterprise RAG (Knowledge Base)</h4>
+                    <p className="text-xs text-slate-400 mt-2 leading-relaxed font-medium">
+                      Connects the AI to your secure corporate memory (Pinecone Vector Database).
+                      Toggle specific knowledge domains like <strong>Market Intel</strong>, <strong>Jira History</strong>, or <strong>Strategy Docs</strong> to ground the analysis in your unique business context.
+                      <br /><span className="text-[10px] text-indigo-400 mt-1 block"><i className="fas fa-shield-halved mr-1"></i> Includes Automatic Failover protection (Gemini → Groq).</span>
+                    </p>
+                  </div>
+                </div>
               </div>
             </section>
 
@@ -297,10 +310,69 @@ const ProductManual: React.FC<ProductManualProps> = ({ onClose }) => {
               </div>
             </section>
 
-            {/* 7. RBAC MATRIX */}
+            {/* 7. PRODUCTIVITY SUITE */}
+            <section id="pm-productivity" className="space-y-6">
+              <div className="flex items-center gap-4 border-b border-indigo-500/20 pb-4">
+                <span className="text-3xl font-black text-indigo-500/50">07.</span>
+                <h3 className="text-2xl font-black text-white uppercase tracking-tight">User Productivity Suite</h3>
+              </div>
+              <p className="text-slate-400 leading-relaxed mb-6">Built-in power tools designed to give you granular control over the AI's behavior and output structure.</p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-xl bg-slate-900/40 border border-slate-800 flex gap-4">
+                  <div className="w-10 h-10 rounded-lg bg-pink-500/10 flex items-center justify-center shrink-0">
+                    <i className="fas fa-wand-magic-sparkles text-pink-400"></i>
+                  </div>
+                  <div>
+                    <h6 className="text-[11px] font-black text-white uppercase mb-1">Magic Wand (Refinement)</h6>
+                    <p className="text-[10px] text-slate-400 leading-relaxed">
+                      Highlight any text in the output to summon the Magic Wand. Ask for specific tweaks like "Make this punchier", "Convert to a table", or "Check against our style guide".
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-slate-900/40 border border-slate-800 flex gap-4">
+                  <div className="w-10 h-10 rounded-lg bg-cyan-500/10 flex items-center justify-center shrink-0">
+                    <i className="fas fa-microchip text-cyan-400"></i>
+                  </div>
+                  <div>
+                    <h6 className="text-[11px] font-black text-white uppercase mb-1">Model Selector</h6>
+                    <p className="text-[10px] text-slate-400 leading-relaxed">
+                      Choose the right brain for the job. Switch between <strong>Gemini 1.5 Pro</strong> (Deep Reasoning) for strategy and <strong>Gemini Flash</strong> (Speed) for quick iteration.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-slate-900/40 border border-slate-800 flex gap-4">
+                  <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
+                    <i className="fas fa-sliders text-purple-400"></i>
+                  </div>
+                  <div>
+                    <h6 className="text-[11px] font-black text-white uppercase mb-1">System Instructions</h6>
+                    <p className="text-[10px] text-slate-400 leading-relaxed">
+                      Override the default AI persona. Add custom rules like "Always output JSON", "Use British English", or "Focus on B2B SaaS metrics" to tailor every response.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-slate-900/40 border border-slate-800 flex gap-4">
+                  <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0">
+                    <i className="fas fa-pen-to-square text-orange-400"></i>
+                  </div>
+                  <div>
+                    <h6 className="text-[11px] font-black text-white uppercase mb-1">Manual Editing</h6>
+                    <p className="text-[10px] text-slate-400 leading-relaxed">
+                      The AI is a co-pilot, not the captain. Seamlessly switch to Edit Mode to manually tweak the generated text before saving or exporting your final report.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* 8. RBAC MATRIX */}
             <section id="pm-rbac_matrix" className="space-y-6">
               <div className="flex items-center gap-4 border-b border-emerald-500/20 pb-4">
-                <span className="text-3xl font-black text-emerald-500/50">07.</span>
+                <span className="text-3xl font-black text-emerald-500/50">08.</span>
                 <h3 className="text-2xl font-black text-white uppercase tracking-tight">Role-Based Access Control (RBAC)</h3>
               </div>
               <p className="text-slate-400 leading-relaxed mb-6">Detailed permissions breakdown for each license tier. Roles are assigned by System Administrators via the User Management panel.</p>
@@ -350,6 +422,13 @@ const ProductManual: React.FC<ProductManualProps> = ({ onClose }) => {
                     </tr>
                     <tr className="border-b border-slate-800/50 bg-indigo-900/10">
                       <td className="p-4 font-bold text-white">Advanced AI (Thinking, Search)</td>
+                      <td className="p-4 text-center"><i className="fas fa-times text-slate-700"></i></td>
+                      <td className="p-4 text-center"><i className="fas fa-lock text-slate-600"></i></td>
+                      <td className="p-4 text-center"><i className="fas fa-check text-emerald-500"></i></td>
+                      <td className="p-4 text-center"><i className="fas fa-check text-emerald-500"></i></td>
+                    </tr>
+                    <tr className="border-b border-slate-800/50 bg-indigo-900/10">
+                      <td className="p-4 font-bold text-white">Enterprise RAG Context</td>
                       <td className="p-4 text-center"><i className="fas fa-times text-slate-700"></i></td>
                       <td className="p-4 text-center"><i className="fas fa-lock text-slate-600"></i></td>
                       <td className="p-4 text-center"><i className="fas fa-check text-emerald-500"></i></td>
@@ -406,7 +485,7 @@ const ProductManual: React.FC<ProductManualProps> = ({ onClose }) => {
           </div>
         </div>
       </div>
-    </div>
+    </div >
   );
 };
 
