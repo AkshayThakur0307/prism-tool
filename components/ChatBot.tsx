@@ -30,6 +30,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ appState }) => {
   // Jira Agent State
   const [isJiraMode, setIsJiraMode] = useState(false);
   const [pendingToolCall, setPendingToolCall] = useState<any>(null); // For storing delete requests waiting confirmation
+  const [pendingContext, setPendingContext] = useState<string>('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Only allow Jira Mode in EPICS stage
@@ -107,42 +108,104 @@ const ChatBot: React.FC<ChatBotProps> = ({ appState }) => {
       };
       const result = await jiraAgent.executeJiraTool(pendingToolCall, config);
       setPendingToolCall(null);
-      await continueConversationWithToolResult(result); // Feed back result
+
+      const contextToUse = pendingContext;
+      setPendingContext(''); // Clear
+      await continueConversationWithToolResult(result, contextToUse, 0); // Feed back result
     }
   };
 
   const cancelDelete = () => {
     setShowDeleteConfirm(false);
     setPendingToolCall(null);
+    setPendingContext('');
     setMessages(prev => [...prev, { role: 'assistant', content: "❌ **Action Cancelled**: Ticket deletion was aborted by user." }]);
   };
 
-  const continueConversationWithToolResult = async (toolResult: string) => {
+  const MAX_TOOL_RECURSION = 2;
+
+  const continueConversationWithToolResult = async (toolResult: string, originalContext: string, recursionDepth: number = 0) => {
     try {
+      // Safety Output
+      console.log(`[ChatBot] Recursive Step ${recursionDepth}/${MAX_TOOL_RECURSION}. Previous Tool Result: ${toolResult.substring(0, 50)}...`);
+
+      if (recursionDepth >= MAX_TOOL_RECURSION) {
+        setMessages(prev => [...prev, { role: 'assistant', content: "⚠️ **Safety Limit Reached**: I've performed multiple actions in a row. To prevent loops, I'm pausing here. Please confirm if you want me to continue." }]);
+        setIsTyping(false);
+        return;
+      }
+
       const systemInstruction = `
         You are the "Discovery Pro AI Assistant".
-        You just executed a tool or received tool output.
-        TOOLS_OUTPUT: ${toolResult}
+        You just executed a tool.
         
-        Task: Summarize the action taken based on the tool output. If it was a search, list the results concisely. If it was an action (create/update), confirm success.
+        PREVIOUS TOOL OUTPUT: ${toolResult}
+        
+        INSTRUCTIONS:
+        1. Review the ORIGINAL USER REQUEST (below) and the TOOL OUTPUT.
+        2. Identify if there are any *remaining* actions from the user's request that haven't been completed yet.
+        3. IF remaining actions exist (e.g. user asked for X and Y, and only X is done), CALL THE NEXT TOOL IMMEDIATELY (Recursive Action).
+        4. IF request is fully complete, summarize the actions taken.
+        
+        DO NOT ask for permission to proceed with the next logical step of the same request. Just do it.
+      `;
+
+      // Pass tools again if we are in Jira Mode to allow chaining
+      const toolsToEnable = isJiraMode ? JIRA_TOOLS : undefined;
+
+      const augmentedPrompt = `
+      ${originalContext}
+
+      ---
+      SYSTEM UPDATE: The previous tool execution is complete. 
+      Tool Result: ${toolResult}
+      
+      Decide your next move:
+      - If there are more steps to fulfill the user's request, execute them now.
+      - If done, report success.
       `;
 
       const response = await callGeminiAgent(
         GeminiCapability.CHAT,
         systemInstruction,
-        "Based on the tool output above, provide a response to the user.",
+        augmentedPrompt,
         [],
         false,
         false,
         undefined,
-        undefined // No tools for this follow-up to avoid loops, or provide if we want multi-hop
+        toolsToEnable // Recursion enablement
       );
+
+      // CHECK FOR RECURSIVE TOOL CALLS
+      if (isJiraMode && response.toolCall) {
+        const toolCall = response.toolCall;
+        setMessages(prev => [...prev, { role: 'assistant', content: `⚙️ **Chaining Action**: \`${toolCall.name}\`...` }]);
+
+        const result = await executeTool(toolCall);
+
+        // If manual confirmation is pending, we stop the recursion here.
+        // It will resume from confirmDelete. We MUST save the context.
+        if (result === "WAITING_FOR_USER_CONFIRMATION") {
+          // Context is saved in pendingContext state (needs to be added to component)
+          // But executeTool doesn't access state directly here.
+          // We will handle this by returning the context requirement.
+          // Actually, we need to update state in `executeTool` or `confirmDelete`.
+          // Let's rely on the fact that confirmDelete will read from a new state variable `pendingContext`.
+          setPendingContext(originalContext);
+          return;
+        }
+
+        // RECURSE
+        await continueConversationWithToolResult(result, originalContext, recursionDepth + 1);
+        return;
+      }
 
       setMessages(prev => [...prev, { role: 'assistant', content: response.text }]);
     } catch (err) {
       console.error("Error in follow-up generation:", err);
       setMessages(prev => [...prev, { role: 'assistant', content: `Tool Executed. Result: ${toolResult}` }]);
     } finally {
+      // Only stop typing if we are truly done (not recursing)
       setIsTyping(false);
     }
   };
@@ -257,11 +320,12 @@ ${userMessage}
 
         // If manual confirmation is pending, we stop here.
         if (result === "WAITING_FOR_USER_CONFIRMATION") {
+          setPendingContext(fullPrompt);
           return;
         }
 
         // Otherwise, render result
-        await continueConversationWithToolResult(result);
+        await continueConversationWithToolResult(result, fullPrompt, 0);
         return;
       }
 

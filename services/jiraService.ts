@@ -27,6 +27,29 @@ export const jiraService = {
      * Note: We use a proxy logic if needed, but for now we'll attempt direct with proper headers
      */
     /**
+     * Helper to handle Jira API errors
+     */
+    handleJiraError: async (response: Response, action: string, context?: string) => {
+        if (response.status === 404) {
+            throw new Error(`Ticket not found: ${context || 'Unknown ID'}. Please verify the ticket ID.`);
+        }
+        const errorData = await response.text();
+        console.error(`Jira API ${action} Error:`, errorData);
+        let errorMessage = `Jira Error: ${response.status} ${response.statusText}`;
+        try {
+            const errorJson = JSON.parse(errorData);
+            if (errorJson.errorMessages && errorJson.errorMessages.length > 0) {
+                errorMessage = errorJson.errorMessages.join(', ');
+            } else if (errorJson.errors) {
+                errorMessage = Object.values(errorJson.errors).join(', ');
+            }
+        } catch (e) {
+            errorMessage = errorData; // Fallback to raw text
+        }
+        throw new Error(errorMessage);
+    },
+
+    /**
      * Create an Epic, Story, Task, or JPD Idea in Jira
      */
     createIssue: async (config: JiraConfig, summary: string, description: string, issueType: 'Epic' | 'Story' | 'Task' | 'Idea' = 'Story', parentKey?: string): Promise<JiraIssueResponse> => {
@@ -84,9 +107,7 @@ export const jiraService = {
         });
 
         if (!response.ok) {
-            const errorData = await response.text();
-            console.error("Jira API Response Error:", errorData);
-            throw new Error(`Jira Error: ${errorData}`);
+            await jiraService.handleJiraError(response, "Create Issue");
         }
 
         return response.json();
@@ -109,18 +130,29 @@ export const jiraService = {
         });
 
         if (!response.ok) {
-            throw new Error(`Failed to fetch issue ${issueKey}`);
+            await jiraService.handleJiraError(response, "Get Issue", issueKey);
         }
 
         return response.json();
     },
 
     /**
+    /**
      * Search Issues using JQL
      */
     searchIssues: async (config: JiraConfig, jql: string): Promise<any> => {
         const baseUrl = '/jira-api';
-        const url = `${baseUrl}/rest/api/3/search?jql=${encodeURIComponent(jql)}`;
+
+        // We must manually construct query params for GET.
+        const queryParams = new URLSearchParams({
+            jql: jql,
+            startAt: '0',
+            maxResults: '50',
+            fields: 'summary,status,issuetype,created'
+        });
+
+        // Use standard search endpoint with GET
+        const url = `${baseUrl}/rest/api/3/search?${queryParams.toString()}`;
 
         const response = await fetch(url, {
             method: 'GET',
@@ -132,7 +164,7 @@ export const jiraService = {
         });
 
         if (!response.ok) {
-            throw new Error(`Failed to search issues with JQL: ${jql}`);
+            await jiraService.handleJiraError(response, "Search Issues", jql);
         }
 
         return response.json();
@@ -159,7 +191,7 @@ export const jiraService = {
         });
 
         if (!response.ok) {
-            throw new Error(`Failed to update issue ${issueKey}`);
+            await jiraService.handleJiraError(response, "Update Issue", issueKey);
         }
     },
 
@@ -179,7 +211,7 @@ export const jiraService = {
         });
 
         if (!response.ok) {
-            throw new Error(`Failed to delete issue ${issueKey}`);
+            await jiraService.handleJiraError(response, "Delete Issue", issueKey);
         }
     },
 
@@ -200,7 +232,7 @@ export const jiraService = {
         });
 
         if (!response.ok) {
-            throw new Error(`Failed to get transitions for ${issueKey}`);
+            await jiraService.handleJiraError(response, "Get Transitions", issueKey);
         }
 
         return response.json();
@@ -231,7 +263,7 @@ export const jiraService = {
         });
 
         if (!response.ok) {
-            throw new Error(`Failed to transition issue ${issueKey} to state ${transitionId}`);
+            await jiraService.handleJiraError(response, "Transition Issue", issueKey);
         }
     },
 
