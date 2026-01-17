@@ -84,7 +84,7 @@ const ModelSelector: React.FC<{ value: string; onChange: (val: string) => void; 
 
 const App: React.FC = () => {
   const { logout, user } = useAuth();
-  const { role, canUseAdvancedAI, canExportData, canUseRefinementStudio, canEditProject, isAdmin, canShareProject, canSyncJira, canUseEstimationStudio, canManageStageIterations, canCustomizeInstructions } = useRBAC();
+  const { role, canUseAdvancedAI, canExportData, canUseRefinementStudio, canEditProject, isAdmin, canShareProject, canSyncJira, canUseEstimationStudio, canManageStageIterations, canCustomizeInstructions, canUseFigma } = useRBAC();
 
   // DEBUG: Permission Tracing
   useEffect(() => {
@@ -2449,7 +2449,7 @@ ${commentsData.map((c: any) => `- [${c.user}]: ${c.message} (${c.resolved ? 'Res
 
                     {/* Figma Context Toggle (Epics Stage) - Below Grounding */}
                     {state.currentStage === DiscoveryStage.EPICS && (
-                      <div className="flex items-center justify-between p-3 rounded-2xl bg-purple-900/10 border border-purple-500/20 transition-all hover:bg-purple-900/20 mt-3">
+                      <div className={`flex items-center justify-between p-3 rounded-2xl bg-purple-900/10 border border-purple-500/20 transition-all ${canUseFigma ? 'hover:bg-purple-900/20' : ''} mt-3`}>
                         <div className="flex items-center gap-3">
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${isFigmaEpicsEnabled ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-500'}`}>
                             <i className="fab fa-figma text-xs"></i>
@@ -2460,8 +2460,8 @@ ${commentsData.map((c: any) => `- [${c.user}]: ${c.message} (${c.resolved ? 'Res
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
-                          {/* Config Gear - Only visible when enabled */}
-                          {isFigmaEpicsEnabled && (
+                          {/* Config Gear - Only visible when enabled AND allowed */}
+                          {isFigmaEpicsEnabled && canUseFigma && (
                             <button
                               onClick={(e) => {
                                 e.preventDefault();
@@ -2478,6 +2478,7 @@ ${commentsData.map((c: any) => `- [${c.user}]: ${c.message} (${c.resolved ? 'Res
                               type="checkbox"
                               className="sr-only peer"
                               checked={isFigmaEpicsEnabled}
+                              disabled={!canUseFigma}
                               onChange={() => {
                                 const nextState = !isFigmaEpicsEnabled;
                                 if (nextState && (!figmaConfig.accessToken || !figmaConfig.fileKey)) {
@@ -2487,7 +2488,8 @@ ${commentsData.map((c: any) => `- [${c.user}]: ${c.message} (${c.resolved ? 'Res
                                 }
                               }}
                             />
-                            <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                            <div className={`w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600 ${!canUseFigma ? 'opacity-50' : ''}`}></div>
+                            {!canUseFigma && <i className="fas fa-lock text-purple-500 text-xs absolute -left-5"></i>}
                           </label>
                         </div>
                       </div>
