@@ -5,7 +5,9 @@ import { AppState, DiscoveryStage } from '../types';
 import MarkdownRenderer from './MarkdownRenderer';
 import { STAGE_CONFIGS } from '../constants';
 import ConfirmationModal from './common/ConfirmationModal';
+import FigmaConfigModal from './FigmaConfigModal';
 import { JIRA_TOOLS, jiraAgent } from '../services/jiraAgent';
+import { FIGMA_TOOLS, figmaAgent } from '../services/figmaAgent';
 
 interface Message {
   role: 'user' | 'assistant' | 'tool';
@@ -27,14 +29,25 @@ const ChatBot: React.FC<ChatBotProps> = ({ appState }) => {
   const lastStageRef = useRef<DiscoveryStage>(appState.currentStage);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
-  // Jira Agent State
+  // Agent Modes
   const [isJiraMode, setIsJiraMode] = useState(false);
+
+  // Figma State
+  const [isFigmaMode, setIsFigmaMode] = useState(false);
+  const [showFigmaModal, setShowFigmaModal] = useState(false);
+  const [triggerFigmaAnalysis, setTriggerFigmaAnalysis] = useState(false); // New state for auto-trigger
+  const [figmaConfig, setFigmaConfig] = useState<{ accessToken: string; fileKey: string }>({
+    accessToken: (import.meta.env.VITE_FIGMA_ACCESS_TOKEN as string) || '',
+    fileKey: (import.meta.env.VITE_FIGMA_FILE_KEY as string) || ''
+  });
+
   const [pendingToolCall, setPendingToolCall] = useState<any>(null); // For storing delete requests waiting confirmation
   const [pendingContext, setPendingContext] = useState<string>('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  // Only allow Jira Mode in EPICS stage
+  // Only allow Jira Mode in EPICS stage (Legacy rule, maybe relax?)
   const canUseJiraAgent = appState.currentStage === DiscoveryStage.EPICS;
+  const canUseFigmaAgent = true;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -49,6 +62,17 @@ const ChatBot: React.FC<ChatBotProps> = ({ appState }) => {
       setIsJiraMode(false);
     }
   }, [appState.currentStage]);
+
+  // Handle auto-trigger for Figma
+  useEffect(() => {
+    if (isFigmaMode && triggerFigmaAnalysis && figmaConfig.fileKey) {
+      setTriggerFigmaAnalysis(false);
+      // Use a small timeout to ensure state propagation
+      setTimeout(() => {
+        handleSend(`Please analyze the structure of Figma file: ${figmaConfig.fileKey}. List the pages and top-level frames.`);
+      }, 100);
+    }
+  }, [isFigmaMode, triggerFigmaAnalysis, figmaConfig.fileKey]);
 
   // Handle stage transitions
   useEffect(() => {
@@ -73,33 +97,77 @@ const ChatBot: React.FC<ChatBotProps> = ({ appState }) => {
     setShowClearConfirm(false);
   };
 
+  // --- FIGMA HANDLERS ---
+  const handleFigmaToggle = () => {
+    if (isFigmaMode) {
+      setIsFigmaMode(false);
+    } else {
+      // Open Modal to configure
+      setShowFigmaModal(true);
+    }
+  };
+
+  const handleFigmaConfigConfirm = (accessToken: string, fileKey: string) => {
+    setFigmaConfig({ accessToken, fileKey });
+    setIsFigmaMode(true);
+    setShowFigmaModal(false);
+
+    // Feedback
+    setMessages(prev => [...prev, { role: 'assistant', content: `🎨 **Figma Agent Enabled**\nConnected with provided token.` }]);
+
+    // Enable trigger for useEffect
+    if (fileKey) {
+      setTriggerFigmaAnalysis(true);
+    }
+  };
+
+
   const executeTool = async (toolCall: any) => {
-    const config = {
-      projectKey: (import.meta.env.VITE_JIRA_PROJECT_KEY as string) || (process.env.VITE_JIRA_PROJECT_KEY as string) || '',
-      email: (import.meta.env.VITE_JIRA_EMAIL as string) || (process.env.VITE_JIRA_EMAIL as string) || '',
-      apiToken: (import.meta.env.VITE_JIRA_API_TOKEN as string) || (process.env.VITE_JIRA_API_TOKEN as string) || '',
-      domain: (import.meta.env.VITE_JIRA_DOMAIN as string) || (process.env.VITE_JIRA_DOMAIN as string) || ''
-    };
+    // JIRA EXECUTION
+    if (toolCall.name.startsWith('jira_') || toolCall.name.startsWith('create_') || toolCall.name.startsWith('delete_') || toolCall.name === 'get_issue' || toolCall.name === 'search_issues' || toolCall.name === 'update_issue' || toolCall.name === 'get_transitions' || toolCall.name === 'transition_issue') {
+      const config = {
+        projectKey: (import.meta.env.VITE_JIRA_PROJECT_KEY as string) || (process.env.VITE_JIRA_PROJECT_KEY as string) || '',
+        email: (import.meta.env.VITE_JIRA_EMAIL as string) || (process.env.VITE_JIRA_EMAIL as string) || '',
+        apiToken: (import.meta.env.VITE_JIRA_API_TOKEN as string) || (process.env.VITE_JIRA_API_TOKEN as string) || '',
+        domain: (import.meta.env.VITE_JIRA_DOMAIN as string) || (process.env.VITE_JIRA_DOMAIN as string) || ''
+      };
 
-    if (!config.apiToken && isJiraMode) {
-      return "Error: Jira API Tool is missing from environment. Please check VITE_JIRA_API_TOKEN.";
+      if (!config.apiToken && isJiraMode) {
+        return "Error: Jira API Tool is missing from environment. Please check VITE_JIRA_API_TOKEN.";
+      }
+
+      // Intercept DELETE for manual confirmation
+      if (toolCall.name === 'delete_ticket') {
+        setPendingToolCall(toolCall);
+        setShowDeleteConfirm(true);
+        return "WAITING_FOR_USER_CONFIRMATION";
+      }
+
+      return await jiraAgent.executeJiraTool(toolCall, config);
     }
 
-    // Intercept DELETE for manual confirmation
-    if (toolCall.name === 'delete_ticket') {
-      setPendingToolCall(toolCall);
-      setShowDeleteConfirm(true);
-      return "WAITING_FOR_USER_CONFIRMATION";
+    // FIGMA EXECUTION
+    if (toolCall.name.startsWith('figma_')) {
+      // PRIORITY: Modal Config -> Env Var
+      const token = figmaConfig.accessToken ||
+        (import.meta.env.VITE_FIGMA_ACCESS_TOKEN as string) ||
+        (process.env.VITE_FIGMA_ACCESS_TOKEN as string) || '';
+
+      const config = {
+        accessToken: token
+      };
+
+      // If Request fails due to auth... well executeFigmaTool handles it.
+      return await figmaAgent.executeFigmaTool(toolCall.name, toolCall.args, config);
     }
 
-    return await jiraAgent.executeJiraTool(toolCall, config);
+    return `Error: Unknown tool ${toolCall.name}`;
   };
 
   const confirmDelete = async () => {
     setShowDeleteConfirm(false);
     if (pendingToolCall) {
       setIsTyping(true);
-      // Execute the pending tool call
       const config = {
         projectKey: (import.meta.env.VITE_JIRA_PROJECT_KEY as string) || '',
         email: (import.meta.env.VITE_JIRA_EMAIL as string) || '',
@@ -111,7 +179,8 @@ const ChatBot: React.FC<ChatBotProps> = ({ appState }) => {
 
       const contextToUse = pendingContext;
       setPendingContext(''); // Clear
-      await continueConversationWithToolResult(result, contextToUse, 0); // Feed back result
+      const stringResult = typeof result === 'string' ? result : JSON.stringify(result);
+      await continueConversationWithToolResult(stringResult, contextToUse, 0); // Feed back result
     }
   };
 
@@ -144,14 +213,16 @@ const ChatBot: React.FC<ChatBotProps> = ({ appState }) => {
         INSTRUCTIONS:
         1. Review the ORIGINAL USER REQUEST (below) and the TOOL OUTPUT.
         2. Identify if there are any *remaining* actions from the user's request that haven't been completed yet.
-        3. IF remaining actions exist (e.g. user asked for X and Y, and only X is done), CALL THE NEXT TOOL IMMEDIATELY (Recursive Action).
+        3. IF remaining actions exist, CALL THE NEXT TOOL IMMEDIATELY (Recursive Action).
         4. IF request is fully complete, summarize the actions taken.
         
         DO NOT ask for permission to proceed with the next logical step of the same request. Just do it.
       `;
 
-      // Pass tools again if we are in Jira Mode to allow chaining
-      const toolsToEnable = isJiraMode ? JIRA_TOOLS : undefined;
+      // Pass tools again to allow chaining
+      let toolsToEnable: any[] = [];
+      if (isJiraMode) toolsToEnable = [...toolsToEnable, ...JIRA_TOOLS];
+      if (isFigmaMode) toolsToEnable = [...toolsToEnable, ...FIGMA_TOOLS];
 
       const augmentedPrompt = `
       ${originalContext}
@@ -173,30 +244,24 @@ const ChatBot: React.FC<ChatBotProps> = ({ appState }) => {
         false,
         false,
         undefined,
-        toolsToEnable // Recursion enablement
+        toolsToEnable.length > 0 ? toolsToEnable : undefined
       );
 
-      // CHECK FOR RECURSIVE TOOL CALLS
-      if (isJiraMode && response.toolCall) {
+      // CHECK FOR TOOL CALLS
+      if (response.toolCall) {
         const toolCall = response.toolCall;
         setMessages(prev => [...prev, { role: 'assistant', content: `⚙️ **Chaining Action**: \`${toolCall.name}\`...` }]);
 
         const result = await executeTool(toolCall);
 
-        // If manual confirmation is pending, we stop the recursion here.
-        // It will resume from confirmDelete. We MUST save the context.
         if (result === "WAITING_FOR_USER_CONFIRMATION") {
-          // Context is saved in pendingContext state (needs to be added to component)
-          // But executeTool doesn't access state directly here.
-          // We will handle this by returning the context requirement.
-          // Actually, we need to update state in `executeTool` or `confirmDelete`.
-          // Let's rely on the fact that confirmDelete will read from a new state variable `pendingContext`.
           setPendingContext(originalContext);
           return;
         }
 
         // RECURSE
-        await continueConversationWithToolResult(result, originalContext, recursionDepth + 1);
+        const stringResult = typeof result === 'string' ? result : JSON.stringify(result);
+        await continueConversationWithToolResult(stringResult, originalContext, recursionDepth + 1);
         return;
       }
 
@@ -205,16 +270,17 @@ const ChatBot: React.FC<ChatBotProps> = ({ appState }) => {
       console.error("Error in follow-up generation:", err);
       setMessages(prev => [...prev, { role: 'assistant', content: `Tool Executed. Result: ${toolResult}` }]);
     } finally {
-      // Only stop typing if we are truly done (not recursing)
       setIsTyping(false);
     }
   };
 
-  const handleSend = async () => {
-    if (!input.trim() || isTyping) return;
+  const handleSend = async (manualInput?: string) => {
+    const textToSend = manualInput || input;
+    if (!textToSend.trim() || isTyping) return;
 
-    const userMessage = input.trim();
-    setInput('');
+    const userMessage = textToSend.trim();
+    if (!manualInput) setInput(''); // Only clear input if typed by user
+
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setIsTyping(true);
 
@@ -246,41 +312,31 @@ const ChatBot: React.FC<ChatBotProps> = ({ appState }) => {
         systemInstruction += `
             \n=== JIRA AGENT MODE ACTIVE ===
             You have full authorization to manage Jira tickets.
-            
-            PROJECT KEY INSTRUCTION:
-            You must identify the target Project Key.
-            1. If the user specifies it (e.g., "in project KAN"), pass it as 'projectKey' in the tool call.
-            2. If not specified, the system will try to use the default environment variable.
-            3. If the tool fails due to missing Project Key, ASK THE USER for it.
-
-            Your capabilities:
-            - Create Epics, Stories, Tasks, Ideas.
-            - Read and Search tickets (use JQL for search).
-            - Update ticket fields.
-            - Delete tickets (Use CAUTION).
-            - Transition tickets through workflow states.
-
-            CRITICAL INSTRUCTION:
-            If the user asks to perform any of the above actions, YOU MUST CALL THE CORRESPONDING TOOL.
-            DO NOT just say "I can do that" or "I have created it" without actually calling the function.
-            Execute the tool FIRST, then summarize the result.
-            
-            Example:
-            User: "Create a story about login"
-            You: [Calls create_ticket function]
+            Capabilities: Create (Epic/Story/Task), Read, Update, Delete, Transition.
+            Use 'search_issues' with JQL for finding tickets.
           `;
-      } else {
+      }
+
+      if (isFigmaMode) {
+        systemInstruction += `
+            \n=== FIGMA AGENT MODE ACTIVE ===
+            You have authorization to read Figma files.
+            Capabilities:
+            - 'figma_get_file_structure': Get pages/layers.
+            - 'figma_read_comments': Get comments.
+            - 'figma_get_node_details': Get specific node info.
+            
+            Use this to understand design requirements or feedback.
+            ${figmaConfig.fileKey ? `DEFAULT TARGET FILE KEY: ${figmaConfig.fileKey}. Use this if the user doesn't specify one.` : ''}
+        `;
+      }
+
+      if (!isJiraMode && !isFigmaMode) {
         systemInstruction += `
             \nYOUR CAPABILITIES:
             1. Explain parts of the generated output.
             2. Help user phrase their inputs for better results.
-            3. Provide industry benchmarks for the current vertical (${appState.projectMetadata.targetVertical}).
-            4. Suggest answers to the refinement questions provided by the module agent.
-            
-            BEHAVIOR:
-            - Stay in character as a professional consultant.
-            - Be concise but insightful.
-            - Reference the global mission and company name whenever providing strategic advice.
+            3. Provide industry benchmarks.
         `;
       }
 
@@ -294,11 +350,11 @@ USER'S NEW MESSAGE:
 ${userMessage}
       `;
 
-      if (isJiraMode) {
-        console.log("[ChatBot] Invoking Gemini with JIRA TOOLS enabled.");
-      } else {
-        console.log("[ChatBot] Invoking Gemini in Standard Mode (No Jira Tools).");
-      }
+      console.log(`[ChatBot] Invoking Gemini. Jira: ${isJiraMode}, Figma: ${isFigmaMode}`);
+
+      let toolsToEnable: any[] = [];
+      if (isJiraMode) toolsToEnable = [...toolsToEnable, ...JIRA_TOOLS];
+      if (isFigmaMode) toolsToEnable = [...toolsToEnable, ...FIGMA_TOOLS];
 
       const response = await callGeminiAgent(
         GeminiCapability.CHAT,
@@ -308,13 +364,14 @@ ${userMessage}
         false, // thinking
         false, // search
         undefined, // model override
-        isJiraMode ? JIRA_TOOLS : undefined
+        toolsToEnable.length > 0 ? toolsToEnable : undefined
       );
 
       // CHECK FOR TOOL CALLS
-      if (isJiraMode && response.toolCall) {
+      if (response.toolCall) {
         const toolCall = response.toolCall;
-        setMessages(prev => [...prev, { role: 'assistant', content: `⚙️ **Executing Jira Action**: \`${toolCall.name}\`...` }]);
+        const agentName = toolCall.name.startsWith('figma') ? 'Figma' : 'Jira';
+        setMessages(prev => [...prev, { role: 'assistant', content: `⚙️ **Executing ${agentName} Action**: \`${toolCall.name}\`...` }]);
 
         const result = await executeTool(toolCall);
 
@@ -324,8 +381,9 @@ ${userMessage}
           return;
         }
 
-        // Otherwise, render result
-        await continueConversationWithToolResult(result, fullPrompt, 0);
+        // Otherwise, render result and handle recursion
+        const stringResult = typeof result === 'string' ? result : JSON.stringify(result);
+        await continueConversationWithToolResult(stringResult, fullPrompt, 0);
         return;
       }
 
@@ -363,8 +421,8 @@ ${userMessage}
         `}
       >
         {/* Header */}
-        <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-slate-900/90 rounded-t-[2.5rem]">
-          <div className="flex items-center gap-4">
+        <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between gap-2 bg-slate-900/90 rounded-t-[2.5rem]">
+          <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-600/30">
               <i className="fas fa-brain text-white text-sm"></i>
             </div>
@@ -373,7 +431,7 @@ ${userMessage}
                 <p className="text-[11px] font-black text-white uppercase tracking-widest leading-none">Assistant</p>
                 <span className="px-1.5 py-0.5 rounded-md bg-indigo-500/10 border border-indigo-500/20 text-[7px] font-black text-indigo-400 uppercase tracking-tighter">Pro</span>
               </div>
-              <p className="text-[9px] text-slate-500 font-bold tracking-widest mt-1 uppercase truncate max-w-[150px]">
+              <p className="text-[9px] text-slate-500 font-bold tracking-widest mt-1 uppercase truncate max-w-[100px] sm:max-w-[140px]">
                 {STAGE_CONFIGS[appState.currentStage].title}
               </p>
             </div>
@@ -383,7 +441,7 @@ ${userMessage}
             {canUseJiraAgent && (
               <button
                 onClick={() => setIsJiraMode(!isJiraMode)}
-                className={`px-3 py-1.5 rounded-lg border text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-2
+                className={`px-2.5 py-1 rounded-md border text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5
                         ${isJiraMode
                     ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/30'
                     : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-blue-400 hover:border-blue-400/50'}
@@ -391,9 +449,26 @@ ${userMessage}
                 title="Enable Autonomous Jira Agent"
               >
                 <i className="fab fa-jira"></i>
-                {isJiraMode ? 'Jira ON' : 'Jira OFF'}
+                {isJiraMode ? 'ON' : 'OFF'}
               </button>
             )}
+
+            {/* Figma Toggle */}
+            {canUseFigmaAgent && (
+              <button
+                onClick={handleFigmaToggle}
+                className={`px-2.5 py-1 rounded-md border text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1.5
+                        ${isFigmaMode
+                    ? 'bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-500/30'
+                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-purple-400 hover:border-purple-400/50'}
+                    `}
+                title="Enable Figma Agent"
+              >
+                <i className="fab fa-figma"></i>
+                {isFigmaMode ? 'ON' : 'OFF'}
+              </button>
+            )}
+
 
             <button
               onClick={handleReset}
@@ -449,23 +524,23 @@ ${userMessage}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              placeholder={isJiraMode ? "Ask to create, read, update, or delete Jira tickets..." : "Ask for advice or refine details..."}
+              placeholder={isJiraMode || isFigmaMode ? "Send instructions to active agents..." : "Ask for advice or refine details..."}
               className={`w-full bg-slate-950/90 border rounded-2xl px-5 py-4 text-[13px] text-white outline-none focus:ring-4 transition-all pr-14 placeholder:text-slate-600
-                ${isJiraMode ? 'border-blue-900/50 focus:ring-blue-500/10 focus:border-blue-500/50' : 'border-slate-800 focus:ring-indigo-500/10 focus:border-indigo-500/50'}
+                ${isJiraMode || isFigmaMode ? 'border-indigo-900/50 focus:ring-indigo-500/10 focus:border-indigo-500/50' : 'border-slate-800 focus:ring-indigo-500/10 focus:border-indigo-500/50'}
               `}
             />
             <button
               onClick={handleSend}
               disabled={!input.trim() || isTyping}
               className={`absolute right-3 w-10 h-10 rounded-xl text-white flex items-center justify-center disabled:opacity-30 disabled:grayscale transition-all active:scale-95 shadow-lg
-                ${isJiraMode ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-600/20' : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/20'}
+                ${isJiraMode || isFigmaMode ? 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/20' : 'bg-slate-700 hover:bg-slate-600 shadow-slate-600/20'}
               `}
             >
               <i className="fas fa-arrow-up"></i>
             </button>
           </div>
           <p className="text-[8px] text-slate-600 uppercase font-black tracking-[0.2em] mt-3 text-center opacity-60">
-            {isJiraMode ? 'Powered by Autonomous Jira Agent' : 'Powered by Gemini Intelligence'}
+            {isJiraMode && isFigmaMode ? 'Powered by Jira & Figma Agents' : isJiraMode ? 'Powered by Jira Agent' : isFigmaMode ? 'Powered by Figma Agent' : 'Powered by Gemini Intelligence'}
           </p>
         </div>
       </div>
@@ -488,6 +563,14 @@ ${userMessage}
         message={`You are about to DELETE a Jira ticket (${pendingToolCall?.args?.issueKey}). This action cannot be undone. Are you sure?`}
         confirmLabel="Yes, Delete Ticket"
         isDestructive={true}
+      />
+
+      <FigmaConfigModal
+        isOpen={showFigmaModal}
+        onClose={() => setShowFigmaModal(false)}
+        onConfirm={handleFigmaConfigConfirm}
+        initialAccessToken={figmaConfig.accessToken}
+        initialFileKey={figmaConfig.fileKey}
       />
     </div>
   );

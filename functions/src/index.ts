@@ -182,3 +182,75 @@ export const jiraProxy = onRequest(async (request, response) => {
         response.status(502).json({ error: "Proxy error", details: error.message });
     }
 });
+
+export const figmaProxy = onRequest(async (request, response) => {
+    // 1. CORS Preflight
+    response.set("Access-Control-Allow-Origin", "*");
+    if (request.method === "OPTIONS") {
+        response.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
+        response.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Figma-Token");
+        response.set("Access-Control-Max-Age", "86400");
+        response.status(204).send("");
+        return;
+    }
+
+    try {
+        const FIGMA_API_BASE = "https://api.figma.com/v1";
+        const envToken = process.env.VITE_FIGMA_ACCESS_TOKEN;
+
+        // 2. Construct Target URL
+        // Strip /figma-api prefix
+        let targetPath = request.path;
+        if (targetPath.startsWith("/figma-api")) {
+            targetPath = targetPath.replace(/^\/figma-api/, "");
+        }
+        if (!targetPath.startsWith('/')) targetPath = '/' + targetPath;
+
+        const targetUrl = new URL(targetPath, FIGMA_API_BASE).toString();
+        logger.info(`[FigmaProxy] Proxying to: ${targetUrl}`);
+
+        // 3. Prepare Headers
+        const newHeaders: any = {};
+        const skipHeaders = ['host', 'origin', 'referer', 'content-length', 'cookie'];
+
+        for (const [key, value] of Object.entries(request.headers)) {
+            if (!skipHeaders.includes(key.toLowerCase())) {
+                newHeaders[key] = value;
+            }
+        }
+
+        // Auth Handling: Prefer Header from Client, Fallback to Env
+        if (!newHeaders['x-figma-token'] && envToken) {
+            newHeaders['X-Figma-Token'] = envToken;
+        }
+
+        // 4. Execute Fetch
+        const fetchOptions: any = {
+            method: request.method,
+            headers: newHeaders,
+            redirect: 'follow'
+        };
+
+        if (request.method !== 'GET' && request.method !== 'HEAD') {
+            fetchOptions.body = request.rawBody;
+        }
+
+        const figmaResponse = await fetch(targetUrl, fetchOptions);
+
+        // 5. Send Response
+        figmaResponse.headers.forEach((value, key) => {
+            if (key.toLowerCase() !== 'content-encoding' && key.toLowerCase() !== 'content-length') {
+                response.set(key, value);
+            }
+        });
+
+        response.set("Access-Control-Allow-Origin", "*");
+
+        const buffer = await figmaResponse.buffer();
+        response.status(figmaResponse.status).send(buffer);
+
+    } catch (error: any) {
+        logger.error("Figma Proxy error", error);
+        response.status(502).json({ error: "Figma Proxy error", details: error.message });
+    }
+});

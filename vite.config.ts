@@ -100,6 +100,38 @@ export default defineConfig(({ mode }) => {
               console.error('[Proxy Error]', err);
             });
           }
+
+        },
+        '/figma-api': {
+          target: 'https://api.figma.com/v1',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/figma-api/, ''),
+          secure: false, // Helps with some dev environment SSL issues
+          configure: (proxy, options) => {
+            proxy.on('proxyReq', (proxyReq, req: any, res) => {
+              console.log(`[Figma Proxy] ${req.method} ${req.url} -> api.figma.com`);
+
+              // Auth Handling
+              const envToken = env.VITE_FIGMA_ACCESS_TOKEN;
+              if (!proxyReq.getHeader('x-figma-token') && envToken) {
+                console.log("[Figma Proxy] Injecting Token from Env");
+                proxyReq.setHeader('X-Figma-Token', envToken);
+              }
+
+              // Clean up headers
+              proxyReq.removeHeader('Cookie');
+              proxyReq.removeHeader('Origin');
+              proxyReq.removeHeader('Referer');
+            });
+
+            proxy.on('proxyRes', (proxyRes, req, res) => {
+              console.log(`[Figma Proxy] Response: ${proxyRes.statusCode} ${proxyRes.statusMessage}`);
+            });
+
+            proxy.on('error', (err, req, res) => {
+              console.error('[Figma Proxy Error]', err);
+            });
+          }
         }
       }
     },

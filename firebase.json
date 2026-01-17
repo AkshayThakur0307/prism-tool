@@ -18,6 +18,10 @@
                 "function": "jiraProxy"
             },
             {
+                "source": "/figma-api/**",
+                "function": "figmaProxy"
+            },
+            {
                 "source": "**",
                 "destination": "/index.html"
             }
