@@ -136,5 +136,98 @@ export const notionService = {
             case 'divider': return `---`;
             default: return '';
         }
+    },
+
+    /**
+     * Helper: Chunk content into 2000-char blocks for Notion API
+     */
+    chunkContent: (content: string): any[] => {
+        const MAX_LENGTH = 2000;
+        const chunks = [];
+
+        for (let i = 0; i < content.length; i += MAX_LENGTH) {
+            chunks.push({
+                object: 'block',
+                type: 'paragraph',
+                paragraph: {
+                    rich_text: [{ type: 'text', text: { content: content.substring(i, i + MAX_LENGTH) } }]
+                }
+            });
+        }
+        return chunks;
+    },
+
+    /**
+     * Create a new page in Notion
+     */
+    createPage: async (accessToken: string, parentId: string, title: string, content: string): Promise<any> => {
+        try {
+            // Chunk content to avoid size limits
+            const blocks = notionService.chunkContent(content);
+
+            const response = await fetch('/notion-api/pages', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json',
+                    'Notion-Version': '2022-06-28'
+                },
+                body: JSON.stringify({
+                    parent: { page_id: parentId }, // Assuming parent is a page for now, could be database_id
+                    properties: {
+                        title: [
+                            {
+                                text: {
+                                    content: title
+                                }
+                            }
+                        ]
+                    },
+                    children: blocks
+                })
+            });
+
+            if (!response.ok) {
+                const err = await response.text();
+                throw new Error(`Notion Create Page Failed: ${response.status} ${err}`);
+            }
+
+            return await response.json();
+        } catch (e: any) {
+            console.error("Notion Create Page Error", e);
+            throw e;
+        }
+    },
+
+    /**
+     * Append blocks to an existing page
+     */
+    appendBlock: async (accessToken: string, blockId: string, content: string): Promise<any> => {
+        try {
+            // Chunk content to avoid size limits
+            const blocks = notionService.chunkContent(content);
+
+            const response = await fetch(`/notion-api/blocks/${blockId}/children`, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json',
+                    'Notion-Version': '2022-06-28'
+                },
+                body: JSON.stringify({
+                    children: blocks
+                })
+            });
+
+            if (!response.ok) {
+                const err = await response.text();
+                throw new Error(`Notion Append Block Failed: ${response.status} ${err}`);
+            }
+
+            return await response.json();
+        } catch (e: any) {
+            console.error("Notion Append Block Error", e);
+            throw e;
+        }
     }
 };

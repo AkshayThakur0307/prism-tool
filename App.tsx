@@ -17,6 +17,7 @@ import { HybridVoiceAssistant } from './services/groqVoiceService';
 import { VoiceInputTrigger } from './components/VoiceInputTrigger';
 import { RefineInputButton } from './components/RefineInputButton';
 import { JIRA_TOOLS, jiraAgent } from './services/jiraAgent';
+import { NOTION_TOOLS, notionAgent } from './services/notionAgent'; // Import Notion Agent
 import MarkdownRenderer from './components/MarkdownRenderer';
 import PresentationView from './components/PresentationView';
 import ChatBot from './components/ChatBot';
@@ -328,6 +329,7 @@ const App: React.FC = () => {
   // Immersive Refinement Modal State
   const [showRefinementModal, setShowRefinementModal] = useState(false);
   const [isRefinementJiraMode, setIsRefinementJiraMode] = useState(false);
+  const [isRefinementNotionMode, setIsRefinementNotionMode] = useState(false); // Notion Mode
   const [pendingRefinementToolCall, setPendingRefinementToolCall] = useState<any>(null); // For deletion confirmation
   const [previewOutput, setPreviewOutput] = useState(''); // Holds the provisional content in modal
   const [refinementChatHistory, setRefinementChatHistory] = useState<Array<{ role: 'user' | 'ai', text: string }>>([]);
@@ -1087,14 +1089,34 @@ ${notionCapture}
     setIsRefining(true);
 
     try {
+      // DEFINING CORE TOOLS LOCALLY
+      const CORE_TOOLS = [
+        {
+          "functionDeclarations": [
+            {
+              "name": "update_document",
+              "description": "Update the document content. Use this tool ONLY when you intend to modify the document text based on the user's request. Do not use for general chat.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "content": { "type": "string", "description": "The FULL updated content of the document." }
+                },
+                "required": ["content"]
+              }
+            }
+          ]
+        }
+      ];
+
       let refineSystemInstruction = `You are an expert editor collaborating with a user on a document. 
-      Your task is to MODIFY the document content based on the user's latest instruction.
-      Maintain the original structure, tone, and formatting unless explicitly asked to change it.
       
-      CRITICAL OUTPUT RULES:
-      1. You must output the FULL MODIFIED DOCUMENT CONTENT. Do not just output the changes.
-      2. Do not include any conversational preamble or explanation in the document output.
-      3. The user's goal is to improve the document iteratively.`;
+      Your Goal: Act as a helpful assistant. You can answer questions about the document, explain your reasoning, OR modify the document if requested.
+
+      CRITICAL RULES:
+      1. To speak to the user (answer questions, explain changes), just output text.
+      2. To MODIFY the document, you MUST use the 'update_document' tool.
+      3. When using 'update_document', pass the COMPLETE updated text.
+      `;
 
       if (isRefinementJiraMode) {
         refineSystemInstruction += `
@@ -1112,11 +1134,32 @@ ${notionCapture}
           `;
       }
 
+      if (isRefinementNotionMode) {
+        refineSystemInstruction += `
+            \n=== NOTION AGENT MODE ACTIVE ===
+            You have authorization to manage Notion pages.
+            Your capabilities:
+            - Create new pages (e.g., save report, creating notes).
+            - Append content to existing pages.
+            - Search and Read pages for context to improve the document.
+
+            IMPORTANT: If the user selects a page that you previously found in a search, DO NOT search again. Use the \`read_page\` tool immediately with the ID you found.
+            
+            If the user asks to perform a Notion action (save, create, append), call the appropriate tool.
+        `;
+      }
+
+      // 1. Context Injection: Add Chat History
+      const chatContext = refinementChatHistory.slice(-6).map(m => `${m.role.toUpperCase()}: ${m.text}`).join('\n');
+
       const refineUserPrompt = `
       CURRENT DOCUMENT CONTENT:
       ${previewOutput}
 
-      USER INSTRUCTION:
+      PREVIOUS CHAT CONTEXT:
+      ${chatContext}
+
+      CURRENT USER INSTRUCTION:
       ${userMessage}
 
       Provide the fully updated document content below (OR call a tool if requested):
@@ -1131,8 +1174,19 @@ ${notionCapture}
         false,
         false,
         selectedModel, // Apply the selected model override
-        isRefinementJiraMode ? JIRA_TOOLS : undefined
+        isRefinementJiraMode || isRefinementNotionMode ?
+          [...CORE_TOOLS, ...(isRefinementJiraMode ? JIRA_TOOLS : []), ...(isRefinementNotionMode ? NOTION_TOOLS : [])]
+          : CORE_TOOLS
       );
+
+      // CHECK FOR CORE TOOL CALLS (Update Document)
+      if (result.toolCall && result.toolCall.name === 'update_document') {
+        const newContent = result.toolCall.args.content;
+        setPreviewOutput(newContent);
+        setRefinementChatHistory(prev => [...prev, { role: 'ai', text: "I've updated the document based on your request." }]);
+        setIsRefining(false);
+        return;
+      }
 
       // CHECK FOR TOOL CALLS
       if (isRefinementJiraMode && result.toolCall) {
@@ -1166,7 +1220,28 @@ ${notionCapture}
 
         try {
           const toolResult = await jiraAgent.executeJiraTool(toolCall, config);
-          setRefinementChatHistory(prev => [...prev, { role: 'ai', text: `✅ Action Complete: ${toolResult}` }]);
+
+          // RECURSIVE LOOP: Feed tool result back to AI
+          const followUpPrompt = `
+          SYSTEM: The tool '${toolCall.name}' was executed successfully.
+          TOOL OUTPUT: ${JSON.stringify(toolResult)}
+          
+          USER'S ORIGINAL REQUEST: "${userMessage}"
+          
+          TASK: Verify the output and provide a natural language response to the user. 
+          If the output is a list, summarize it.
+          If the output is a confirmation, confirm it to the user.
+          `;
+
+          const followUpResult = await callGeminiAgent(
+            GeminiCapability.ANALYSIS_MAIN,
+            refineSystemInstruction,
+            followUpPrompt,
+            [], false, false, selectedModel, CORE_TOOLS // No external tools for follow-up to prevent loops, only CORE for updates
+          );
+
+          setRefinementChatHistory(prev => [...prev, { role: 'ai', text: followUpResult.text || "Action complete." }]);
+
         } catch (err: any) {
           setRefinementChatHistory(prev => [...prev, { role: 'ai', text: `❌ Action Failed: ${err.message}` }]);
         }
@@ -1174,8 +1249,51 @@ ${notionCapture}
         return;
       }
 
-      setPreviewOutput(result.text);
-      setRefinementChatHistory(prev => [...prev, { role: 'ai', text: "I've updated the document based on your request. Check the preview!" }]);
+      // CHECK FOR NOTION TOOL CALLS
+      if (isRefinementNotionMode && result.toolCall) {
+        const toolCall = result.toolCall;
+        const notionToolNames = ['create_page', 'append_to_page', 'search_pages', 'read_page'];
+
+        if (notionToolNames.includes(toolCall.name)) {
+          setRefinementChatHistory(prev => [...prev, { role: 'ai', text: `⚙️ Executing Notion Action: ${toolCall.name}...` }]);
+          try {
+            const toolResult = await notionAgent.executeNotionTool(toolCall, notionConfig);
+
+            // RECURSIVE LOOP: Feed tool result back to AI
+            const followUpPrompt = `
+            SYSTEM: The tool '${toolCall.name}' was executed successfully.
+            TOOL OUTPUT: ${JSON.stringify(toolResult)}
+            
+            USER'S ORIGINAL REQUEST: "${userMessage}"
+            
+            TASK: Verify the output and provide a natural language response to the user. 
+            If the output is a list, summarize it naturally.
+            `;
+
+            const followUpResult = await callGeminiAgent(
+              GeminiCapability.ANALYSIS_MAIN,
+              refineSystemInstruction,
+              followUpPrompt,
+              [], false, false, selectedModel, CORE_TOOLS
+            );
+
+            setRefinementChatHistory(prev => [...prev, { role: 'ai', text: followUpResult.text || "Notion action complete." }]);
+
+          } catch (err: any) {
+            setRefinementChatHistory(prev => [...prev, { role: 'ai', text: `❌ Action Failed: ${err.message}` }]);
+          }
+          setIsRefining(false);
+          return;
+        }
+      }
+
+      // If no tool call, treating as conversational response
+      if (result.text) {
+        setRefinementChatHistory(prev => [...prev, { role: 'ai', text: result.text }]);
+      } else {
+        // Fallback if no text and no handled tool
+        setRefinementChatHistory(prev => [...prev, { role: 'ai', text: "I'm not sure how to handle that. Could you clarify?" }]);
+      }
 
     } catch (error: any) {
       console.error("Refinement failed:", error);
@@ -1541,6 +1659,7 @@ ${notionCapture}
         break;
       // We continue without Figma context rather than failing the whole run
     }
+    setConfirmation(null);
   }
 
   const resetCurrentStage = async () => {
@@ -3502,6 +3621,39 @@ ${notionCapture}
                       {isRefinementJiraMode ? 'Jira ON' : 'Jira OFF'}
                     </button>
                   )}
+                  {/* Notion Toggle */}
+                  {canUseNotion && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => {
+                          if (!notionConfig.accessToken) {
+                            setShowNotionConfig(true);
+                            return;
+                          }
+                          setIsRefinementNotionMode(!isRefinementNotionMode);
+                        }}
+                        className={`px-3 py-1.5 rounded-lg border text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-2
+                                    ${isRefinementNotionMode
+                            ? 'bg-amber-600 border-amber-500 text-white shadow-lg shadow-amber-500/30'
+                            : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-amber-400 hover:border-amber-400/50'}
+                                `}
+                        title={notionConfig.accessToken ? "Enable Notion Agent" : "Configure Notion Connection"}
+                      >
+                        <i className="fas fa-book"></i>
+                        {isRefinementNotionMode ? 'Notion ON' : 'Notion OFF'}
+                      </button>
+                      {/* Settings Gear for Notion */}
+                      {isRefinementNotionMode && (
+                        <button
+                          onClick={() => setShowNotionConfig(true)}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+                          title="Notion Settings"
+                        >
+                          <i className="fas fa-cog text-xs"></i>
+                        </button>
+                      )}
+                    </div>
+                  )}
                   <ModelSelector
                     value={selectedModel}
                     onChange={setSelectedModel}
@@ -3527,17 +3679,7 @@ ${notionCapture}
 
                 {/* LEFT: Live Preview (65%) */}
                 <div className="flex-[2] border-r border-slate-800 bg-slate-950/50 flex flex-col min-w-0 relative">
-                  {isRefining && (
-                    <div className="absolute inset-0 z-10 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center flex-col gap-4 animate-in fade-in duration-300">
-                      <div className="relative">
-                        <div className="w-12 h-12 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <i className="fas fa-magic text-indigo-400 text-xs animate-pulse"></i>
-                        </div>
-                      </div>
-                      <p className="text-xs font-bold text-indigo-400 uppercase tracking-widest animate-pulse">Refining Content...</p>
-                    </div>
-                  )}
+                  {/* Loader Removed to allow viewing doc while chatting */}
                   <div className="h-10 border-b border-slate-800/50 flex items-center px-6 bg-slate-900/30">
                     <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Live Document Preview</span>
                   </div>

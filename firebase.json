@@ -22,6 +22,10 @@
                 "function": "figmaProxy"
             },
             {
+                "source": "/notion-api/**",
+                "function": "notionProxy"
+            },
+            {
                 "source": "**",
                 "destination": "/index.html"
             }
