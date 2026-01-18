@@ -384,8 +384,16 @@ const App: React.FC = () => {
   // Voice State
   const [voice, setVoice] = useState<VoiceState>({ isActive: false, isListening: false, isSpeaking: false, transcript: '' });
 
-  // Knowledge Base UI State
-  const [isKnowledgeBaseOpen, setIsKnowledgeBaseOpen] = useState(false);
+  // Knowledge Base UI State - Auto-activate when any child is enabled
+  const isKnowledgeBaseActive = isNotionEnabled || isConfluenceEnabled;
+  const [isKnowledgeBaseExpanded, setIsKnowledgeBaseExpanded] = useState(false);
+
+  // Auto-expand when active
+  useEffect(() => {
+    if (isKnowledgeBaseActive) {
+      setIsKnowledgeBaseExpanded(true);
+    }
+  }, [isKnowledgeBaseActive]);
 
   const config = STAGE_CONFIGS[state.currentStage];
   const currentStageData = state.stages[state.currentStage];
@@ -2806,13 +2814,13 @@ ${confluenceCapture}
                       {/* Parent Header */}
                       <div className="flex items-center justify-between p-3 bg-slate-950/30">
                         <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${isKnowledgeBaseOpen ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-500'}`}>
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${isKnowledgeBaseActive ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-500'}`}>
                             <i className="fas fa-layer-group text-xs"></i>
                           </div>
                           <div>
                             <p className="text-[10px] font-black uppercase tracking-wider text-white leading-none">Knowledge Base</p>
                             <p className="text-[8px] text-slate-500 mt-1 uppercase font-bold tracking-widest">
-                              {isKnowledgeBaseOpen ? 'Sources Active' : 'Connect Data'}
+                              {isKnowledgeBaseActive ? 'Sources Active' : 'Connect Data'}
                             </p>
                           </div>
                         </div>
@@ -2820,19 +2828,15 @@ ${confluenceCapture}
                           <input
                             type="checkbox"
                             className="sr-only peer"
-                            checked={isKnowledgeBaseOpen}
-                            onChange={(e) => {
-                              setIsKnowledgeBaseOpen(e.target.checked);
-                              // Optional: Auto-enable children if parent is opened?
-                              // For now, valid to just reveal them.
-                            }}
+                            checked={isKnowledgeBaseExpanded}
+                            onChange={(e) => setIsKnowledgeBaseExpanded(e.target.checked)}
                           />
-                          <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                          <div className={`w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all ${isKnowledgeBaseActive ? 'peer-checked:bg-indigo-600' : 'peer-checked:bg-slate-700'}`}></div>
                         </label>
                       </div>
 
-                      {/* Child Toggles - Revealed when Parent is Open */}
-                      {isKnowledgeBaseOpen && (
+                      {/* Child Toggles - Revealed when Expanded */}
+                      {isKnowledgeBaseExpanded && (
                         <div className="p-3 pt-0 space-y-2 animate-in slide-in-from-top-2 duration-300">
                           <div className="h-px bg-slate-800/50 mb-2 mx-2"></div>
 
