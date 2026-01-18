@@ -150,6 +150,64 @@ export default defineConfig(({ mode }) => {
               }
             });
           }
+        },
+        '/confluence-api': {
+          target: 'https://api.atlassian.com/ex/confluence', // Base URL will be dynamic based on Cloud ID usually, but for standard API via domain: https://<domain>.atlassian.net/wiki/rest/api
+          // We will use the dynamic router approach derived from Jira proxy
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/confluence-api/, ''),
+          secure: false,
+          router: (req) => {
+            let customDomain = req.headers['x-confluence-domain'] as string;
+
+            // Regex Fallback for robustness (URL object can be finicky in proxy context)
+            if (!customDomain && req.url) {
+              const match = req.url.match(/[?&]proxy_domain=([^&]+)/);
+              if (match && match[1]) {
+                try {
+                  customDomain = decodeURIComponent(match[1]);
+                } catch (e) {
+                  console.error("[Vite Proxy] Failed to decode query domain", e);
+                }
+              }
+            }
+
+            // DEBUG LOGGING
+            console.log("[Vite Proxy] Confluence Router Check");
+            console.log("  Headers:", JSON.stringify(req.headers));
+            console.log("  Resolved Domain:", customDomain);
+
+            if (customDomain) {
+              // Ensure protocol and strip trailing slash
+              let domain = customDomain.startsWith('http') ? customDomain : `https://${customDomain}`;
+              if (domain.endsWith('/')) domain = domain.slice(0, -1);
+
+              console.log("  -> Routing to:", `${domain}/wiki/rest/api`);
+              return `${domain}/wiki/rest/api`;
+            }
+            console.log("  -> Fallback to api.atlassian.com");
+            return 'https://api.atlassian.com'; // Fallback
+          },
+          configure: (proxy, options) => {
+            proxy.on('proxyReq', (proxyReq, req: any, res) => {
+              // Determine target for logging
+              const customDomain = req.headers['x-confluence-domain'];
+              const target = customDomain ? `${customDomain}/wiki/rest/api` : 'unknown';
+              console.log(`[Confluence Proxy] ${req.method} ${req.url} -> ${target}`);
+
+              // Inject Auth if ENV var present and header missing (Dev convenience)
+              // Note: Confluence uses Basic Auth (Email:Token) similar to Jira
+
+              proxyReq.removeHeader('Cookie');
+              proxyReq.removeHeader('Origin');
+              proxyReq.removeHeader('Referer');
+              proxyReq.removeHeader('X-Confluence-Domain');
+
+              // Security Headers
+              proxyReq.setHeader('X-Atlassian-Token', 'no-check');
+              proxyReq.setHeader('User-Agent', 'ConfluenceAgent/1.0');
+            });
+          }
         }
       }
     },

@@ -12,6 +12,7 @@ import { scrapeUrl } from './services/webScraper';
 import { jiraService } from './services/jiraService';
 import { figmaService } from './services/figmaService'; // Import figmaService
 import { notionService } from './services/notionService'; // Import notionService
+import { confluenceService } from './services/confluenceService';
 import { createLiveAssistant } from './services/liveService';
 import { HybridVoiceAssistant } from './services/groqVoiceService';
 import { VoiceInputTrigger } from './components/VoiceInputTrigger';
@@ -25,6 +26,9 @@ import ProductManual from './components/ProductManual';
 import ProjectListModal from './components/ProjectListModal';
 import FigmaConfigModal from './components/FigmaConfigModal';
 import NotionConfigModal from './components/NotionConfigModal'; // New
+import { ConfluenceConfigModal } from './components/ConfluenceConfigModal';
+import { ConfluenceConfig } from './types';
+import { CONFLUENCE_TOOLS, confluenceAgent } from './services/confluenceAgent';
 import { marked } from 'marked';
 import { useAuth } from './src/contexts/AuthContext';
 import { useRBAC } from './src/hooks/useRBAC';
@@ -274,12 +278,10 @@ const App: React.FC = () => {
   const [isNotionEnabled, setIsNotionEnabled] = useState(false);
   const [showNotionConfig, setShowNotionConfig] = useState(false);
   // Default to empty config or hydrate later
-  const [notionConfig, setNotionConfig] = useState<NotionConfig>({
+  const [notionConfig, setNotionConfig] = useState<NotionConfig | undefined>({
     accessToken: '',
     selectedResources: []
   });
-
-  // Sync Figma State to AppState (Persistence)
   useEffect(() => {
     setState(prev => ({
       ...prev,
@@ -322,6 +324,39 @@ const App: React.FC = () => {
     }
   }, [state.currentStage, activeProjectId]);
 
+  // Confluence State
+  const [isConfluenceEnabled, setIsConfluenceEnabled] = useState(false);
+  const [showConfluenceConfig, setShowConfluenceConfig] = useState(false);
+  const [confluenceConfig, setConfluenceConfig] = useState<ConfluenceConfig>();
+
+  // Sync Confluence State to AppState (Persistence)
+  useEffect(() => {
+    setState(prev => ({
+      ...prev,
+      stages: {
+        ...prev.stages,
+        [prev.currentStage]: {
+          ...prev.stages[prev.currentStage],
+          isConfluenceEnabled: isConfluenceEnabled,
+          confluenceConfig: confluenceConfig
+        }
+      }
+    }));
+  }, [isConfluenceEnabled, confluenceConfig, state.currentStage]);
+
+  // Hydrate Confluence State on Stage Change
+  useEffect(() => {
+    const stageData = state.stages[state.currentStage];
+    if (stageData) {
+      setIsConfluenceEnabled(!!stageData.isConfluenceEnabled);
+      if (stageData.confluenceConfig) {
+        setConfluenceConfig(stageData.confluenceConfig);
+      } else {
+        setConfluenceConfig(undefined);
+      }
+    }
+  }, [state.currentStage, activeProjectId]);
+
   // Output Editing & Refinement
   const [isEditingOutput, setIsEditingOutput] = useState(false);
   const [tempOutput, setTempOutput] = useState('');
@@ -330,6 +365,7 @@ const App: React.FC = () => {
   const [showRefinementModal, setShowRefinementModal] = useState(false);
   const [isRefinementJiraMode, setIsRefinementJiraMode] = useState(false);
   const [isRefinementNotionMode, setIsRefinementNotionMode] = useState(false); // Notion Mode
+  const [isRefinementConfluenceMode, setIsRefinementConfluenceMode] = useState(false); // Confluence Mode
   const [pendingRefinementToolCall, setPendingRefinementToolCall] = useState<any>(null); // For deletion confirmation
   const [previewOutput, setPreviewOutput] = useState(''); // Holds the provisional content in modal
   const [refinementChatHistory, setRefinementChatHistory] = useState<Array<{ role: 'user' | 'ai', text: string }>>([]);
@@ -347,6 +383,9 @@ const App: React.FC = () => {
 
   // Voice State
   const [voice, setVoice] = useState<VoiceState>({ isActive: false, isListening: false, isSpeaking: false, transcript: '' });
+
+  // Knowledge Base UI State
+  const [isKnowledgeBaseOpen, setIsKnowledgeBaseOpen] = useState(false);
 
   const config = STAGE_CONFIGS[state.currentStage];
   const currentStageData = state.stages[state.currentStage];
@@ -816,24 +855,46 @@ GLOBAL PROJECT CONTEXT:
 - Competitors: ${state.projectMetadata.keyCompetitors || 'Not Provided'}
       `;
 
-      let userPrompt = `
-${metadataContext}
+      // REFACTOR: Structured Prompt Payload (Array of Parts)
+      const promptParts: { text: string }[] = [];
 
+      // 1. Global Context
+      promptParts.push({
+        text: `
+GLOBAL PROJECT CONTEXT:
+${metadataContext}
+` });
+
+      // 2. Active Task Input
+      promptParts.push({
+        text: `
 === ACTIVE TASK INPUT (FOCUS HERE) ===
 "${stageData.input}"
 ======================================
+` });
 
+      // 3. Module Context
+      promptParts.push({
+        text: `
 === MODULE CONTEXT (USE FOR SEARCH RELEVANCE) ===
 Stage: ${STAGE_CONFIGS[targetStage].title}
 Company: ${state.projectMetadata.companyName || 'Generic Product'}
 Vertical: ${state.projectMetadata.targetVertical || 'General'}
 =================================================
+` });
 
+      // 4. Background History
+      promptParts.push({
+        text: `
 === BACKGROUND HISTORY (READ-ONLY CONTEXT) ===
 NOTE: The following history is for context only. DO NOT perform searches based on errors, logs, or issues found in this history unless explicitly requested in the Active Task Input.
 ${prevContext}
 ==============================================
+` });
 
+      // 5. User Clarifications & Critical Instructions
+      promptParts.push({
+        text: `
 USER RESPONSES TO CLARIFICATIONS: ${JSON.stringify(filteredAnswers)}
 
 STAGE-SPECIFIC REFERENCE URLS:
@@ -849,27 +910,25 @@ When using Google Search:
 - Generate queries based ONLY on "ACTIVE TASK INPUT" and "GLOBAL PROJECT CONTEXT".
 - ABSOLUTELY DO NOT search for "MSBuild", "error codes", "compilation failures", or "system logs" found in history.
 - Search for: "Market size of...", "Competitors to...", "Technical architecture for...", "API documentation for...".
-      `;
+` });
 
       if (stageData.formatReference) {
-        userPrompt += `\n\nSTRICT FORMATTING: Follow the structure of [REF: ${stageData.formatReference.name}] exactly. Match its tables and section hierarchy.`;
+        promptParts.push({ text: `\n\nSTRICT FORMATTING: Follow the structure of [REF: ${stageData.formatReference.name}] exactly. Match its tables and section hierarchy.` });
       }
 
       const allFiles = [...stageData.files];
       if (stageData.formatReference) allFiles.push(stageData.formatReference);
 
       // SCRAPING LOGIC
-      let finalUserPrompt = userPrompt;
       if (stageData.urls && stageData.urls.length > 0) {
         console.log("Scraping URLs...", stageData.urls);
         const scrapePromises = stageData.urls.map(url => scrapeUrl(url));
         const scrapedResults = await Promise.all(scrapePromises);
-        finalUserPrompt += `\n\n=== SCRAPED WEB CONTENT ===\n${scrapedResults.join('\n\n----------------\n\n')}\n===========================`;
+        promptParts.push({ text: `\n\n=== SCRAPED WEB CONTENT ===\n${scrapedResults.join('\n\n----------------\n\n')}\n===========================` });
       }
 
       // --- FIGMA INJECTION (for Epics Stage) ---
       let figmaCapture: any = null; // Captured for DB persistence
-
       if (targetStage === DiscoveryStage.EPICS && isFigmaEpicsEnabled && figmaConfig.accessToken && figmaConfig.fileKey) {
         setToast({ message: "Fetching Figma design context...", type: 'info' });
         console.log("Fetching Figma context...");
@@ -878,10 +937,8 @@ When using Google Search:
             figmaService.getFile({ accessToken: figmaConfig.accessToken }, figmaConfig.fileKey),
             figmaService.getComments({ accessToken: figmaConfig.accessToken }, figmaConfig.fileKey)
           ]);
-
           // Capture for DB
           figmaCapture = { file: fileData, comments: commentsData };
-
           const figmaContext = `
 === DESIGN CONTEXT (FROM FIGMA) ===
 File Name: ${fileData.name}
@@ -894,18 +951,16 @@ DESIGN COMMENTS (Relevant Discussions):
 ${commentsData.map((c: any) => `- [${c.user}]: ${c.message} (${c.resolved ? 'Resolved' : 'Active'})`).join('\n')}
 ===================================
           `;
-          finalUserPrompt += figmaContext;
+          promptParts.push({ text: figmaContext });
           console.log("Figma context injected.");
         } catch (err: any) {
           console.error("Figma Fetch Error:", err);
           setToast({ message: `Figma Error: ${err.message}`, type: 'error' });
-          // We continue without Figma context rather than failing the whole run
         }
       }
 
       // --- NOTION INJECTION (All Stages) ---
       let notionCapture: any = null;
-
       if (isNotionEnabled && notionConfig.accessToken && notionConfig.selectedResources.length > 0) {
         setToast({ message: "Fetching Notion knowledge...", type: 'info' });
         console.log("Fetching Notion context...");
@@ -916,20 +971,53 @@ ${commentsData.map((c: any) => `- [${c.user}]: ${c.message} (${c.resolved ? 'Res
               return `--- PAGE: ${res.title} (${res.url}) ---\n${content}`;
             })
           );
-
           notionCapture = pagesContent.join('\n\n');
-
           const notionContext = `
 === KNOWLEDGE BASE (FROM NOTION) ===
 ${notionCapture}
 ====================================
               `;
-          finalUserPrompt += notionContext;
+          promptParts.push({ text: notionContext });
           console.log("Notion context injected.");
-
         } catch (err: any) {
           console.error("Notion Fetch Error:", err);
           setToast({ message: `Notion Error: ${err.message}`, type: 'error' });
+        }
+      }
+
+      // --- CONFLUENCE INJECTION (All Stages) ---
+      let confluenceCapture: any = null;
+      if (isConfluenceEnabled) {
+        const hasToken = !!confluenceConfig?.apiToken;
+        const hasResources = confluenceConfig?.selectedResources?.length && confluenceConfig.selectedResources.length > 0;
+        if (!hasToken) {
+          console.warn("[Confluence] Enabled but missing token");
+        } else if (!hasResources) {
+          console.warn("[Confluence] Enabled but no pages selected");
+          setToast({ message: "Confluence is ON but no pages are selected. Configuring now...", type: 'warning' });
+        } else {
+          setToast({ message: "Reading Confluence pages...", type: 'info' });
+          console.log("Fetching Confluence context...");
+          try {
+            const pagesContent = await Promise.all(
+              confluenceConfig!.selectedResources!.map(async (res) => {
+                console.log(`[DEBUG] Fetching page: ${res.title} (${res.id})`);
+                const content = await confluenceService.getPageContent(confluenceConfig!, res.id);
+                return `--- WIKI PAGE: ${res.title} (Space: ${res.spaceKey}) ---\n${content}`;
+              })
+            );
+            confluenceCapture = pagesContent.join('\n\n');
+            const confluenceContext = `
+=== KNOWLEDGE BASE (FROM CONFLUENCE) ===
+${confluenceCapture}
+========================================
+                    `;
+            promptParts.push({ text: confluenceContext });
+            console.log("Confluence context injected.");
+          } catch (err: any) {
+            console.error("Confluence Fetch Error:", err);
+            setToast({ message: `Confluence Error: ${err.message}`, type: 'error' });
+          }
         }
       }
 
@@ -948,47 +1036,37 @@ ${notionCapture}
       // DISPATCHER LOGIC: Select Service based on Dropdown
       if (selectedModel.startsWith('groq-')) {
         console.log(`[Dispatcher] Routing to Groq Service (${selectedModel})...`);
-
-        // Import dynamically if needed, or rely on top-level. Using top-level import from plan.
-        // We must adapt the response format or ensure GroqVoiceService isn't confusingly named (it's groqService.ts).
-        const { callGroqAgent } = await import('./services/groqService'); // Dynamic import to be safe/lazy
-
-        // Call Groq
-        // Model mapping: groq-llama-3 -> openai/gpt-oss-120b (as per service logic) or pass explicit?
-        // The service currently hardcodes selection based on multimodal. 
-        // We will pass the ID just for logging, but the service handles the specific Llama implementation.
+        const { callGroqAgent } = await import('./services/groqService');
+        // Call Groq (Note: groqService now flattens the promptParts)
         const groqResponse = await callGroqAgent(
-          selectedModel, // Passed for logging, service decides actual endpoint
+          selectedModel,
           customInstructions[targetStage] || STAGE_CONFIGS[targetStage].systemInstruction,
-          finalUserPrompt,
+          promptParts, // Passing structured parts
           allFiles,
           state.settings.isThinkingEnabled,
           state.settings.isSearchEnabled,
-          effectiveTemp, // Pass configured temperature
-          effectiveTopP // Pass configured TopP
+          effectiveTemp,
+          effectiveTopP
         );
-
-        // Normalize response
         result = {
           text: groqResponse.text,
           sources: groqResponse.sources || [],
           searchEntryPointHtml: groqResponse.searchEntryPointHtml
         };
-
       } else {
         console.log(`[Dispatcher] Routing to Gemini Service (${selectedModel})...`);
         result = await callGeminiAgent(
           GeminiCapability.ANALYSIS_MAIN,
           customInstructions[targetStage] || STAGE_CONFIGS[targetStage].systemInstruction,
-          finalUserPrompt,
+          promptParts, // Passing structured parts
           allFiles,
           state.settings.isThinkingEnabled,
           state.settings.isSearchEnabled,
-          selectedModel, // Pass the specific override
-          undefined,    // tools
-          effectiveTemp, // Pass configured temperature
-          effectiveTopP, // Pass configured TopP
-          currentStageData.enabledNamespaces || [] // Pass Enabled RAG Namespaces
+          selectedModel,
+          undefined,
+          effectiveTemp,
+          effectiveTopP,
+          currentStageData.enabledNamespaces || []
         );
       }
 
@@ -1149,6 +1227,22 @@ ${notionCapture}
         `;
       }
 
+      if (isRefinementConfluenceMode) {
+        refineSystemInstruction += `
+            \n=== CONFLUENCE AGENT MODE ACTIVE ===
+            You have authorization to manage Confluence pages.
+            Your capabilities:
+            - Create new pages (e.g. documentation, reports).
+            - Append content to existing pages.
+            - Search and Read pages.
+
+            When creating content, use well-structured HTML or text.
+            If the user asks for a Confluence action, call the tool.
+          `;
+      }
+
+      // 1. Context Injection: Add Chat History
+
       // 1. Context Injection: Add Chat History
       const chatContext = refinementChatHistory.slice(-6).map(m => `${m.role.toUpperCase()}: ${m.text}`).join('\n');
 
@@ -1174,8 +1268,12 @@ ${notionCapture}
         false,
         false,
         selectedModel, // Apply the selected model override
-        isRefinementJiraMode || isRefinementNotionMode ?
-          [...CORE_TOOLS, ...(isRefinementJiraMode ? JIRA_TOOLS : []), ...(isRefinementNotionMode ? NOTION_TOOLS : [])]
+        isRefinementJiraMode || isRefinementNotionMode || isRefinementConfluenceMode ?
+          [...CORE_TOOLS,
+          ...(isRefinementJiraMode ? JIRA_TOOLS : []),
+          ...(isRefinementNotionMode ? NOTION_TOOLS : []),
+          ...(isRefinementConfluenceMode ? CONFLUENCE_TOOLS : [])
+          ]
           : CORE_TOOLS
       );
 
@@ -1278,6 +1376,44 @@ ${notionCapture}
             );
 
             setRefinementChatHistory(prev => [...prev, { role: 'ai', text: followUpResult.text || "Notion action complete." }]);
+
+          } catch (err: any) {
+            setRefinementChatHistory(prev => [...prev, { role: 'ai', text: `❌ Action Failed: ${err.message}` }]);
+          }
+          setIsRefining(false);
+          return;
+        }
+      }
+
+      // CHECK FOR CONFLUENCE TOOL CALLS
+      if (isRefinementConfluenceMode && result.toolCall) {
+        const toolCall = result.toolCall;
+        const confToolNames = ['create_confluence_page', 'append_to_confluence_page', 'search_confluence', 'read_confluence_page'];
+
+        if (confToolNames.includes(toolCall.name)) {
+          setRefinementChatHistory(prev => [...prev, { role: 'ai', text: `⚙️ Executing Confluence Action: ${toolCall.name}...` }]);
+          try {
+            const toolResult = await confluenceAgent.executeConfluenceTool(toolCall, confluenceConfig!);
+
+            // RECURSIVE LOOP
+            const followUpPrompt = `
+                    SYSTEM: The tool '${toolCall.name}' was executed successfully.
+                    TOOL OUTPUT: ${JSON.stringify(toolResult)}
+                    
+                    USER'S ORIGINAL REQUEST: "${userMessage}"
+                    
+                    TASK: Verify the output and provide a natural language response to the user.
+                    If the output is a list, summarize it naturally.
+                  `;
+
+            const followUpResult = await callGeminiAgent(
+              GeminiCapability.ANALYSIS_MAIN,
+              refineSystemInstruction,
+              followUpPrompt,
+              [], false, false, selectedModel, CORE_TOOLS
+            );
+
+            setRefinementChatHistory(prev => [...prev, { role: 'ai', text: followUpResult.text || "Confluence action complete." }]);
 
           } catch (err: any) {
             setRefinementChatHistory(prev => [...prev, { role: 'ai', text: `❌ Action Failed: ${err.message}` }]);
@@ -2637,50 +2773,109 @@ ${notionCapture}
                       </label>
                     </div>
 
-                    {/* Notion Integration Toggle - Available in ALL stages */}
-                    <div className="flex items-center justify-between p-3 rounded-2xl bg-blue-900/10 border border-blue-500/20 transition-all hover:bg-blue-900/20 mt-3">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${isNotionEnabled ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-500'}`}>
-                          <i className="fas fa-book text-xs"></i>
+                    {/* Knowledge Base Toggle - Parent */}
+                    <div className="flex flex-col bg-slate-900/40 border border-slate-800 rounded-2xl overflow-hidden mt-3 transition-colors hover:border-indigo-500/30">
+                      {/* Parent Header */}
+                      <div className="flex items-center justify-between p-3 bg-slate-950/30">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${isKnowledgeBaseOpen ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-500'}`}>
+                            <i className="fas fa-layer-group text-xs"></i>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-wider text-white leading-none">Knowledge Base</p>
+                            <p className="text-[8px] text-slate-500 mt-1 uppercase font-bold tracking-widest">
+                              {isKnowledgeBaseOpen ? 'Sources Active' : 'Connect Data'}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-[10px] font-black uppercase tracking-wider text-white leading-none">Notion Integration</p>
-                          <p className="text-[8px] text-slate-500 mt-1 uppercase font-bold tracking-widest">{isNotionEnabled ? (!notionConfig.selectedResources.length ? 'Select Pages' : `${notionConfig.selectedResources.length} Pages Active`) : 'Connect Knowledge'}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        {/* Config Gear - Only visible when enabled AND allowed */}
-                        {isNotionEnabled && canUseNotion && (
-                          <button
-                            onClick={(e) => {
-                              e.preventDefault();
-                              setShowNotionConfig(true);
-                            }}
-                            className="w-6 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-500 hover:text-white flex items-center justify-center transition-colors border border-slate-700 hover:border-slate-500"
-                            title="Configure Notion Pages"
-                          >
-                            <i className="fas fa-cog text-[10px]"></i>
-                          </button>
-                        )}
-                        <label className="relative inline-flex items-center cursor-pointer group/lock">
+                        <label className="relative inline-flex items-center cursor-pointer">
                           <input
                             type="checkbox"
                             className="sr-only peer"
-                            checked={isNotionEnabled}
-                            disabled={!canUseNotion}
-                            onChange={() => {
-                              const nextState = !isNotionEnabled;
-                              if (nextState && (!notionConfig.accessToken || !notionConfig.selectedResources.length)) {
-                                setShowNotionConfig(true);
-                              } else {
-                                setIsNotionEnabled(nextState);
-                              }
+                            checked={isKnowledgeBaseOpen}
+                            onChange={(e) => {
+                              setIsKnowledgeBaseOpen(e.target.checked);
+                              // Optional: Auto-enable children if parent is opened?
+                              // For now, valid to just reveal them.
                             }}
                           />
-                          <div className={`w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 ${!canUseNotion ? 'opacity-50' : ''}`}></div>
-                          {!canUseNotion && <i className="fas fa-lock text-blue-500 text-xs absolute -left-5"></i>}
+                          <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                         </label>
                       </div>
+
+                      {/* Child Toggles - Revealed when Parent is Open */}
+                      {isKnowledgeBaseOpen && (
+                        <div className="p-3 pt-0 space-y-2 animate-in slide-in-from-top-2 duration-300">
+                          <div className="h-px bg-slate-800/50 mb-2 mx-2"></div>
+
+                          {/* Notion Child Toggle */}
+                          <div className="flex items-center justify-between pl-2 pr-1 py-1">
+                            <div className="flex items-center gap-3 opacity-90">
+                              <i className="fas fa-book text-slate-400 text-xs w-4 text-center"></i>
+                              <div>
+                                <p className="text-[10px] font-bold text-slate-300">Notion</p>
+                                <p className="text-[8px] text-slate-500 uppercase tracking-widest">{isNotionEnabled ? (notionConfig.selectedResources.length ? `${notionConfig.selectedResources.length} Pages` : 'Select Pages') : 'Not Connected'}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {isNotionEnabled && canUseNotion && (
+                                <button onClick={() => setShowNotionConfig(true)} className="text-slate-500 hover:text-white transition-colors p-1"><i className="fas fa-cog text-[10px]"></i></button>
+                              )}
+                              <label className="relative inline-flex items-center cursor-pointer scale-75 origin-right">
+                                <input
+                                  type="checkbox"
+                                  className="sr-only peer"
+                                  checked={isNotionEnabled}
+                                  disabled={!canUseNotion}
+                                  onChange={() => {
+                                    const next = !isNotionEnabled;
+                                    if (next && (!notionConfig.accessToken || !notionConfig.selectedResources.length)) {
+                                      setShowNotionConfig(true);
+                                    } else {
+                                      setIsNotionEnabled(next);
+                                    }
+                                  }}
+                                />
+                                <div className={`w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600 ${!canUseNotion ? 'opacity-50 cursor-not-allowed' : ''}`}></div>
+                                {!canUseNotion && <i className="fas fa-lock text-blue-500 text-xs absolute -left-5"></i>}
+                              </label>
+                            </div>
+                          </div>
+
+                          {/* Confluence Child Toggle */}
+                          <div className="flex items-center justify-between pl-2 pr-1 py-1">
+                            <div className="flex items-center gap-3 opacity-90">
+                              <i className="fab fa-confluence text-blue-400 text-xs w-4 text-center"></i>
+                              <div>
+                                <p className="text-[10px] font-bold text-slate-300">Confluence</p>
+                                <p className="text-[8px] text-slate-500 uppercase tracking-widest">{isConfluenceEnabled ? (confluenceConfig?.selectedResources?.length ? `${confluenceConfig.selectedResources.length} Pages` : 'Select Pages') : 'Not Connected'}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {isConfluenceEnabled && (
+                                <button onClick={() => setShowConfluenceConfig(true)} className="text-slate-500 hover:text-white transition-colors p-1"><i className="fas fa-cog text-[10px]"></i></button>
+                              )}
+                              <label className="relative inline-flex items-center cursor-pointer scale-75 origin-right">
+                                <input
+                                  type="checkbox"
+                                  className="sr-only peer"
+                                  checked={isConfluenceEnabled}
+                                  onChange={() => {
+                                    const next = !isConfluenceEnabled;
+                                    if (next && (!confluenceConfig?.apiToken || !confluenceConfig?.selectedResources?.length)) {
+                                      setShowConfluenceConfig(true);
+                                    } else {
+                                      setIsConfluenceEnabled(next);
+                                    }
+                                  }}
+                                />
+                                <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500"></div>
+                              </label>
+                            </div>
+                          </div>
+
+                        </div>
+                      )}
                     </div>
 
                     {/* Figma Context Toggle (Epics Stage) - Below Grounding */}
@@ -3654,6 +3849,41 @@ ${notionCapture}
                       )}
                     </div>
                   )}
+                  {/* Confluence Toggle in Header */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => {
+                        if (!confluenceConfig?.apiToken) {
+                          setShowConfluenceConfig(true);
+                        } else {
+                          const newState = !isRefinementConfluenceMode;
+                          setIsRefinementConfluenceMode(newState);
+                          if (newState) {
+                            setIsRefinementNotionMode(false);
+                            setIsRefinementJiraMode(false);
+                          }
+                        }
+                      }}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[10px] font-bold uppercase tracking-wider transition-all
+                            ${isRefinementConfluenceMode
+                          ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/30'
+                          : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-blue-400 hover:border-blue-400/50'}
+                                `}
+                      title={confluenceConfig?.apiToken ? "Enable Confluence Agent" : "Configure Confluence Connection"}
+                    >
+                      <i className="fab fa-confluence"></i>
+                      {isRefinementConfluenceMode ? 'Wiki ON' : 'Wiki OFF'}
+                    </button>
+                    {isRefinementConfluenceMode && (
+                      <button
+                        onClick={() => setShowConfluenceConfig(true)}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+                        title="Confluence Settings"
+                      >
+                        <i className="fas fa-cog text-xs"></i>
+                      </button>
+                    )}
+                  </div>
                   <ModelSelector
                     value={selectedModel}
                     onChange={setSelectedModel}
@@ -3820,9 +4050,18 @@ ${notionCapture}
         isOpen={showNotionConfig}
         onClose={() => setShowNotionConfig(false)}
         config={notionConfig}
-        onSave={(newConfig) => {
-          setNotionConfig(newConfig);
-          if (!isNotionEnabled) setIsNotionEnabled(true);
+        onSave={(cfg) => {
+          setNotionConfig(cfg);
+          setIsNotionEnabled(true);
+        }}
+      />
+      <ConfluenceConfigModal
+        isOpen={showConfluenceConfig}
+        onClose={() => setShowConfluenceConfig(false)}
+        config={confluenceConfig}
+        onSave={(cfg) => {
+          setConfluenceConfig(cfg);
+          setIsConfluenceEnabled(true);
         }}
       />
 

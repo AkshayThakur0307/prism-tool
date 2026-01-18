@@ -34,7 +34,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.figmaProxy = exports.jiraProxy = exports.shareProject = void 0;
+exports.confluenceProxy = exports.notionProxy = exports.figmaProxy = exports.jiraProxy = exports.shareProject = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const logger = __importStar(require("firebase-functions/logger"));
 const admin = __importStar(require("firebase-admin"));
@@ -244,6 +244,134 @@ exports.figmaProxy = (0, https_1.onRequest)(async (request, response) => {
     catch (error) {
         logger.error("Figma Proxy error", error);
         response.status(502).json({ error: "Figma Proxy error", details: error.message });
+    }
+});
+exports.notionProxy = (0, https_1.onRequest)(async (request, response) => {
+    // 1. CORS Preflight
+    response.set("Access-Control-Allow-Origin", "*");
+    if (request.method === "OPTIONS") {
+        response.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE, PATCH");
+        response.set("Access-Control-Allow-Headers", "Content-Type, Authorization, Notion-Version");
+        response.set("Access-Control-Max-Age", "86400");
+        response.status(204).send("");
+        return;
+    }
+    try {
+        const NOTION_API_BASE = "https://api.notion.com/v1";
+        // 2. Construct Target URL
+        // Strip /notion-api prefix
+        let targetPath = request.path;
+        if (targetPath.startsWith("/notion-api")) {
+            targetPath = targetPath.replace(/^\/notion-api/, "");
+        }
+        if (!targetPath.startsWith('/'))
+            targetPath = '/' + targetPath;
+        const targetUrl = new URL(targetPath, NOTION_API_BASE).toString();
+        logger.info(`[NotionProxy] Proxying to: ${targetUrl}`);
+        // 3. Prepare Headers
+        const newHeaders = {};
+        const skipHeaders = ['host', 'origin', 'referer', 'content-length', 'cookie'];
+        for (const [key, value] of Object.entries(request.headers)) {
+            if (!skipHeaders.includes(key.toLowerCase())) {
+                newHeaders[key] = value;
+            }
+        }
+        // Ensure Notion Version
+        if (!newHeaders['notion-version']) {
+            newHeaders['Notion-Version'] = '2022-06-28';
+        }
+        // 4. Execute Fetch
+        const fetchOptions = {
+            method: request.method,
+            headers: newHeaders,
+            redirect: 'follow'
+        };
+        if (request.method !== 'GET' && request.method !== 'HEAD') {
+            fetchOptions.body = request.rawBody;
+        }
+        const notionResponse = await (0, node_fetch_1.default)(targetUrl, fetchOptions);
+        // 5. Send Response
+        notionResponse.headers.forEach((value, key) => {
+            if (key.toLowerCase() !== 'content-encoding' && key.toLowerCase() !== 'content-length') {
+                response.set(key, value);
+            }
+        });
+        response.set("Access-Control-Allow-Origin", "*");
+        const buffer = await notionResponse.buffer();
+        response.status(notionResponse.status).send(buffer);
+    }
+    catch (error) {
+        logger.error("Notion Proxy error", error);
+        response.status(502).json({ error: "Notion Proxy error", details: error.message });
+    }
+});
+exports.confluenceProxy = (0, https_1.onRequest)(async (request, response) => {
+    // 1. CORS Preflight
+    response.set("Access-Control-Allow-Origin", "*");
+    if (request.method === "OPTIONS") {
+        response.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE, PATCH");
+        response.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Atlassian-Token, X-Confluence-Domain");
+        response.set("Access-Control-Max-Age", "86400");
+        response.status(204).send("");
+        return;
+    }
+    try {
+        // 2. Determine Target Domain
+        const customDomain = request.headers['x-confluence-domain'];
+        if (!customDomain) {
+            logger.error("No Confluence Domain provided in header x-confluence-domain");
+            response.status(400).json({ error: "Configuration Error: No Confluence Domain provided." });
+            return;
+        }
+        const baseUrl = customDomain.startsWith("http") ? customDomain : `https://${customDomain}`;
+        // Confluence Cloud REST API Base: https://<site>.atlassian.net/wiki/rest/api
+        const targetBase = `${baseUrl}/wiki/rest/api`;
+        // 3. Construct Target URL
+        let targetPath = request.path;
+        if (targetPath.startsWith("/confluence-api")) {
+            targetPath = targetPath.replace(/^\/confluence-api/, "");
+        }
+        if (!targetPath.startsWith('/'))
+            targetPath = '/' + targetPath;
+        if (!targetPath.startsWith('/'))
+            targetPath = '/' + targetPath;
+        // Construct Final URL
+        const finalUrl = `${targetBase}${targetPath}`;
+        logger.info(`[ConfluenceProxy] Proxying to: ${finalUrl}`);
+        // 4. Prepare Headers
+        const newHeaders = {};
+        const skipHeaders = ['host', 'origin', 'referer', 'content-length', 'cookie'];
+        for (const [key, value] of Object.entries(request.headers)) {
+            if (!skipHeaders.includes(key.toLowerCase())) {
+                newHeaders[key] = value;
+            }
+        }
+        // Security Headers
+        newHeaders['X-Atlassian-Token'] = 'no-check';
+        newHeaders['User-Agent'] = 'ConfluenceAgent/1.0';
+        // 5. Execute Fetch
+        const fetchOptions = {
+            method: request.method,
+            headers: newHeaders,
+            redirect: 'follow'
+        };
+        if (request.method !== 'GET' && request.method !== 'HEAD') {
+            fetchOptions.body = request.rawBody;
+        }
+        const confResponse = await (0, node_fetch_1.default)(finalUrl, fetchOptions);
+        // 6. Send Response
+        confResponse.headers.forEach((value, key) => {
+            if (key.toLowerCase() !== 'content-encoding' && key.toLowerCase() !== 'content-length') {
+                response.set(key, value);
+            }
+        });
+        response.set("Access-Control-Allow-Origin", "*");
+        const buffer = await confResponse.buffer();
+        response.status(confResponse.status).send(buffer);
+    }
+    catch (error) {
+        logger.error("Confluence Proxy error", error);
+        response.status(502).json({ error: "Confluence Proxy error", details: error.message });
     }
 });
 //# sourceMappingURL=index.js.map

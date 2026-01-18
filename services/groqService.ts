@@ -15,7 +15,7 @@ export interface GroqAgentResponse {
 export async function callGroqAgent(
     modelName: string, // Kept for compatibility, but mapped internally
     systemInstruction: string,
-    userPrompt: string,
+    userPrompt: string | { text: string }[],
     contextFiles: FileContext[] = [],
     isThinking: boolean = false,
     useSearch: boolean = false,
@@ -23,6 +23,10 @@ export async function callGroqAgent(
     topP?: number,
     tools?: any[] // Support generic tools (Gemini format)
 ): Promise<GroqAgentResponse> {
+    // Normalize userPrompt to string for Groq compatibility
+    if (Array.isArray(userPrompt)) {
+        userPrompt = userPrompt.map(p => p.text).join('\n\n');
+    }
 
     if (!process.env.GROQ_API_KEY) {
         console.error("GROQ_API_KEY is missing from environment variables. If this is a production build, ensure the key is provided at build time (e.g., in CI/CD or before running 'npm run build').");

@@ -6,11 +6,43 @@ export enum DiscoveryStage {
   EPICS = 'EPICS'
 }
 
+// --- CONFLUENCE INTEGRATION ---
+export interface ConfluenceConfig {
+  domain: string;
+  email: string;
+  apiToken: string;
+  spaceKey?: string;
+}
+
+export interface ConfluencePage {
+  id: string;
+  title: string;
+  spaceKey: string;
+  version: number;
+  url: string;
+}
+
 export interface FileContext {
   name: string;
   content: string; // Base64 for images, text for others
   mimeType: string;
   size: number;
+}
+
+// --- CONFLUENCE INTEGRATION ---
+export interface ConfluenceConfig {
+  domain: string;
+  email: string;
+  apiToken: string;
+  spaceKey?: string;
+}
+
+export interface ConfluencePage {
+  id: string;
+  title: string;
+  spaceKey: string;
+  version: number;
+  url: string;
 }
 
 export interface GroundingSource {
@@ -64,6 +96,10 @@ export interface StageData {
   isNotionEnabled?: boolean;
   notionConfig?: NotionConfig;
   notionData?: any; // The captured Markdown content from Notion
+
+  // Confluence Integration
+  isConfluenceEnabled?: boolean;
+  confluenceConfig?: ConfluenceConfig;
 }
 
 export interface NotionResource {

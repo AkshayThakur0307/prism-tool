@@ -19,7 +19,7 @@ export interface GeminiAgentResponse {
 export async function callGeminiAgent(
   capability: GeminiCapability,
   systemInstruction: string,
-  userPrompt: string,
+  userPrompt: string | { text: string }[],
   contextFiles: FileContext[] = [],
   isThinking: boolean = false,
   useSearch: boolean = false,
@@ -60,15 +60,19 @@ export async function callGeminiAgent(
 
   // ENTERPRISE RAG: Real Context Injection
   // We construct an 'effectivePrompt' so that the RAG context is available to BOTH Gemini and the Groq failover.
-  let effectivePrompt = userPrompt;
+  // Note: For structured input, we inject RAG as a separate part at the beginning.
+  let ragContextPart: string | null = null;
+  let effectivePrompt = ""; // Reconstructed for string usages
 
   if (enabledNamespaces && enabledNamespaces.length > 0) {
     console.log(`[RAG] Processing ${enabledNamespaces.length} active namespaces:`, enabledNamespaces);
+    // Simple query extraction for RAG: Use whole prompt if string, or first part if array
+    const queryForRag = typeof userPrompt === 'string' ? userPrompt : (userPrompt[0]?.text || '');
 
     // Iterate through all enabled namespaces and fetch context
     const ragPromises = enabledNamespaces.map(async (ns) => {
       try {
-        const context = await searchPinecone(ns, userPrompt);
+        const context = await searchPinecone(ns, queryForRag);
         if (context) {
           return `=== CONTEXT FROM ${ns.toUpperCase()} ===\n${context}\n====================`;
         }
@@ -82,23 +86,33 @@ export async function callGeminiAgent(
     const combinedContext = ragResults.filter(Boolean).join('\n\n');
 
     if (combinedContext) {
-      effectivePrompt = `
-${combinedContext}
-
-=== ACTIVE USER PROMPT ===
-${userPrompt}
-`;
-      console.log("[RAG] Injected combined context into effective prompt.");
+      ragContextPart = combinedContext;
+      console.log("[RAG] Injected combined context.");
     }
   }
 
   const ai = new GoogleGenAI({ apiKey: apiKey || '' });
 
   // Prepare Content Parts using the Enhanced Prompt
-  const parts: any[] = [{ text: effectivePrompt }];
+  let parts: any[] = [];
 
-  // Handle multimodal context (Images, PDFs, and Videos)
-  // hasMultimodal is already calculated at the top
+  // 1. RAG Context (First)
+  if (ragContextPart) {
+    parts.push({ text: ragContextPart });
+  }
+
+  // 2. User Prompt (String or Array)
+  if (typeof userPrompt === 'string') {
+    parts.push({ text: userPrompt });
+    effectivePrompt = (ragContextPart ? ragContextPart + "\n\n" : "") + userPrompt;
+  } else if (Array.isArray(userPrompt)) {
+    parts = parts.concat(userPrompt);
+    // Reconstruct string for logging/compatibility
+    const userPromptStr = userPrompt.map(p => p.text).join('\n\n');
+    effectivePrompt = (ragContextPart ? ragContextPart + "\n\n" : "") + userPromptStr;
+  }
+
+  // 3. Multimodal Context Objects
   if (hasMultimodal) {
     console.log('Processing multimodal context...');
   }
@@ -120,6 +134,7 @@ ${userPrompt}
     } else {
       // Text context
       parts.push({ text: `[FILE: ${file.name}]\n${file.content}` });
+      effectivePrompt += `\n\n[FILE: ${file.name}]\n${file.content}`;
     }
   });
 
