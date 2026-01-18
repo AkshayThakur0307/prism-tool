@@ -1177,7 +1177,10 @@ ${confluenceCapture}
               "parameters": {
                 "type": "object",
                 "properties": {
-                  "content": { "type": "string", "description": "The FULL updated content of the document." }
+                  "content": {
+                    "type": "string",
+                    "description": "The FULL updated content of the document."
+                  }
                 },
                 "required": ["content"]
               }
@@ -1242,8 +1245,6 @@ ${confluenceCapture}
       }
 
       // 1. Context Injection: Add Chat History
-
-      // 1. Context Injection: Add Chat History
       const chatContext = refinementChatHistory.slice(-6).map(m => `${m.role.toUpperCase()}: ${m.text}`).join('\n');
 
       const refineUserPrompt = `
@@ -1259,23 +1260,50 @@ ${confluenceCapture}
       Provide the fully updated document content below (OR call a tool if requested):
       `;
 
-      // Using ANALYSIS_MAIN capability for high quality editing
-      const result = await callGeminiAgent(
-        GeminiCapability.ANALYSIS_MAIN,
-        refineSystemInstruction,
-        refineUserPrompt,
-        [],
-        false,
-        false,
-        selectedModel, // Apply the selected model override
-        isRefinementJiraMode || isRefinementNotionMode || isRefinementConfluenceMode ?
-          [...CORE_TOOLS,
-          ...(isRefinementJiraMode ? JIRA_TOOLS : []),
-          ...(isRefinementNotionMode ? NOTION_TOOLS : []),
-          ...(isRefinementConfluenceMode ? CONFLUENCE_TOOLS : [])
-          ]
-          : CORE_TOOLS
-      );
+      // TOOL CONSTRUCTION
+      const toolsToUse = isRefinementJiraMode || isRefinementNotionMode || isRefinementConfluenceMode ?
+        [...CORE_TOOLS,
+        ...(isRefinementJiraMode ? JIRA_TOOLS : []),
+        ...(isRefinementNotionMode ? NOTION_TOOLS : []),
+        ...(isRefinementConfluenceMode ? CONFLUENCE_TOOLS : [])
+        ]
+        : CORE_TOOLS;
+
+      let result;
+
+      // DISPATCHER: Route to correct service
+      if (selectedModel.startsWith('groq-')) {
+        console.log(`[Refinement] Routing to Groq Service (${selectedModel})...`);
+        const { callGroqAgent } = await import('./services/groqService');
+
+        // Call Groq Agent
+        result = await callGroqAgent(
+          selectedModel,
+          refineSystemInstruction,
+          refineUserPrompt,
+          [], // No files in refinement currently
+          false, // Not Thinking mode
+          false, // No Search
+          0.5, // Temp
+          1.0, // TopP
+          toolsToUse
+        );
+
+      } else {
+        console.log(`[Refinement] Routing to Gemini Service (${selectedModel})...`);
+
+        // Using ANALYSIS_MAIN capability for high quality editing
+        result = await callGeminiAgent(
+          GeminiCapability.ANALYSIS_MAIN,
+          refineSystemInstruction,
+          refineUserPrompt,
+          [],
+          false,
+          false,
+          selectedModel, // Apply the selected model override
+          toolsToUse
+        );
+      }
 
       // CHECK FOR CORE TOOL CALLS (Update Document)
       if (result.toolCall && result.toolCall.name === 'update_document') {
