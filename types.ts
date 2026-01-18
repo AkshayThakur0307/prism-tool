@@ -59,6 +59,24 @@ export interface StageData {
   isFigmaEnabled?: boolean; // Toggle state
   figmaConfig?: { accessToken: string; fileKey: string }; // Connection details
   figmaData?: any; // The raw or summarized Figma response captured for this stage
+
+  // Notion Integration
+  isNotionEnabled?: boolean;
+  notionConfig?: NotionConfig;
+  notionData?: any; // The captured Markdown content from Notion
+}
+
+export interface NotionResource {
+  id: string; // Page or Database ID
+  title: string;
+  type: 'page' | 'database';
+  icon?: string; // Emoji or URL
+  url?: string;
+}
+
+export interface NotionConfig {
+  accessToken: string; // Internal Integration Secret
+  selectedResources: NotionResource[];
 }
 
 // RAG / Vector Search Namespaces

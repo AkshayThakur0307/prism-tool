@@ -28,6 +28,7 @@ export const useRBAC = () => {
         canCustomizeInstructions: hasAccess('canCustomizeInstructions'),
         canUseEnterpriseRAG: hasAccess('canUseEnterpriseRAG'),
         canUseFigma: hasAccess('canUseFigma'),
+        canUseNotion: hasAccess('canUseNotion'),
 
         // Export / Integrations
         canExportData: hasAccess('canExportData'),

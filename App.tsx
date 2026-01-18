@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { RAGControlPanel } from './components/RAGControlPanel';
 import { InstructionEditModal } from './components/InstructionEditModal';
-import { DiscoveryStage, AppState, FileContext, VoiceState, Project, ProjectMetadata, StageVersion, GroundingSource } from './types';
+import { DiscoveryStage, AppState, FileContext, VoiceState, Project, ProjectMetadata, StageVersion, GroundingSource, NotionConfig } from './types';
 import { STAGE_CONFIGS } from './constants';
 import { callGeminiAgent } from './services/geminiService';
 import { projectService } from './services/projectService';
@@ -11,6 +11,7 @@ import { GeminiCapability } from './services/modelConfig';
 import { scrapeUrl } from './services/webScraper';
 import { jiraService } from './services/jiraService';
 import { figmaService } from './services/figmaService'; // Import figmaService
+import { notionService } from './services/notionService'; // Import notionService
 import { createLiveAssistant } from './services/liveService';
 import { HybridVoiceAssistant } from './services/groqVoiceService';
 import { VoiceInputTrigger } from './components/VoiceInputTrigger';
@@ -22,6 +23,7 @@ import ChatBot from './components/ChatBot';
 import ProductManual from './components/ProductManual';
 import ProjectListModal from './components/ProjectListModal';
 import FigmaConfigModal from './components/FigmaConfigModal';
+import NotionConfigModal from './components/NotionConfigModal'; // New
 import { marked } from 'marked';
 import { useAuth } from './src/contexts/AuthContext';
 import { useRBAC } from './src/hooks/useRBAC';
@@ -84,7 +86,7 @@ const ModelSelector: React.FC<{ value: string; onChange: (val: string) => void; 
 
 const App: React.FC = () => {
   const { logout, user } = useAuth();
-  const { role, canUseAdvancedAI, canExportData, canUseRefinementStudio, canEditProject, isAdmin, canShareProject, canSyncJira, canUseEstimationStudio, canManageStageIterations, canCustomizeInstructions, canUseFigma } = useRBAC();
+  const { role, canUseAdvancedAI, canExportData, canUseRefinementStudio, canEditProject, isAdmin, canShareProject, canSyncJira, canUseEstimationStudio, canManageStageIterations, canCustomizeInstructions, canUseFigma, canUseNotion } = useRBAC();
 
   // DEBUG: Permission Tracing
   useEffect(() => {
@@ -267,6 +269,15 @@ const App: React.FC = () => {
     fileKey: (process.env as any).VITE_FIGMA_FILE_KEY || ''
   });
 
+  // Notion State
+  const [isNotionEnabled, setIsNotionEnabled] = useState(false);
+  const [showNotionConfig, setShowNotionConfig] = useState(false);
+  // Default to empty config or hydrate later
+  const [notionConfig, setNotionConfig] = useState<NotionConfig>({
+    accessToken: '',
+    selectedResources: []
+  });
+
   // Sync Figma State to AppState (Persistence)
   useEffect(() => {
     setState(prev => ({
@@ -281,6 +292,34 @@ const App: React.FC = () => {
       }
     }));
   }, [isFigmaEpicsEnabled, figmaConfig]);
+
+  // Sync Notion State to AppState (Persistence)
+  useEffect(() => {
+    setState(prev => ({
+      ...prev,
+      stages: {
+        ...prev.stages,
+        [prev.currentStage]: {
+          ...prev.stages[prev.currentStage],
+          isNotionEnabled: isNotionEnabled,
+          notionConfig: notionConfig
+        }
+      }
+    }));
+  }, [isNotionEnabled, notionConfig, state.currentStage]);
+
+  // Hydrate Notion State on Stage Change or Project Load
+  useEffect(() => {
+    const stageData = state.stages[state.currentStage];
+    if (stageData) {
+      setIsNotionEnabled(!!stageData.isNotionEnabled);
+      if (stageData.notionConfig) {
+        setNotionConfig(stageData.notionConfig);
+      } else {
+        setNotionConfig({ accessToken: '', selectedResources: [] });
+      }
+    }
+  }, [state.currentStage, activeProjectId]);
 
   // Output Editing & Refinement
   const [isEditingOutput, setIsEditingOutput] = useState(false);
@@ -829,7 +868,7 @@ When using Google Search:
       // --- FIGMA INJECTION (for Epics Stage) ---
       let figmaCapture: any = null; // Captured for DB persistence
 
-      if (isFigmaEpicsEnabled && figmaConfig.accessToken && figmaConfig.fileKey) {
+      if (targetStage === DiscoveryStage.EPICS && isFigmaEpicsEnabled && figmaConfig.accessToken && figmaConfig.fileKey) {
         setToast({ message: "Fetching Figma design context...", type: 'info' });
         console.log("Fetching Figma context...");
         try {
@@ -859,6 +898,36 @@ ${commentsData.map((c: any) => `- [${c.user}]: ${c.message} (${c.resolved ? 'Res
           console.error("Figma Fetch Error:", err);
           setToast({ message: `Figma Error: ${err.message}`, type: 'error' });
           // We continue without Figma context rather than failing the whole run
+        }
+      }
+
+      // --- NOTION INJECTION (All Stages) ---
+      let notionCapture: any = null;
+
+      if (isNotionEnabled && notionConfig.accessToken && notionConfig.selectedResources.length > 0) {
+        setToast({ message: "Fetching Notion knowledge...", type: 'info' });
+        console.log("Fetching Notion context...");
+        try {
+          const pagesContent = await Promise.all(
+            notionConfig.selectedResources.map(async (res) => {
+              const content = await notionService.getPageContent(notionConfig.accessToken, res.id);
+              return `--- PAGE: ${res.title} (${res.url}) ---\n${content}`;
+            })
+          );
+
+          notionCapture = pagesContent.join('\n\n');
+
+          const notionContext = `
+=== KNOWLEDGE BASE (FROM NOTION) ===
+${notionCapture}
+====================================
+              `;
+          finalUserPrompt += notionContext;
+          console.log("Notion context injected.");
+
+        } catch (err: any) {
+          console.error("Notion Fetch Error:", err);
+          setToast({ message: `Notion Error: ${err.message}`, type: 'error' });
         }
       }
 
@@ -955,7 +1024,9 @@ ${commentsData.map((c: any) => `- [${c.user}]: ${c.message} (${c.resolved ? 'Res
               coherenceScore: finalCoherence,
               versions: [newVersion, ...(oldData.versions || [])].slice(0, 10), // Keep last 10
               // Persist Figma Data (New)
-              figmaData: figmaCapture || oldData.figmaData // Keep old capture if this run didn't fetch new one, or clear?
+              figmaData: figmaCapture || oldData.figmaData, // Keep old capture if this run didn't fetch new one, or clear?
+              // Persist Notion Data (New)
+              notionData: notionCapture || oldData.notionData
               // Usually if disabled, figmaCapture is null. 
               // Let's rely on figmaCapture if fetched, else keep old.
               // If explicitly disabled, maybe we should verify logic.
@@ -1468,9 +1539,9 @@ ${commentsData.map((c: any) => `- [${c.user}]: ${c.message} (${c.resolved ? 'Res
             });
         }
         break;
+      // We continue without Figma context rather than failing the whole run
     }
-    setConfirmation(null);
-  };
+  }
 
   const resetCurrentStage = async () => {
     // Permission Check
@@ -2445,6 +2516,52 @@ ${commentsData.map((c: any) => `- [${c.user}]: ${c.message} (${c.resolved ? 'Res
                         <div className={`w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600 ${!canUseAdvancedAI ? 'opacity-50' : ''}`}></div>
                         {!canUseAdvancedAI && <i className="fas fa-lock text-amber-500 text-xs absolute -left-5"></i>}
                       </label>
+                    </div>
+
+                    {/* Notion Integration Toggle - Available in ALL stages */}
+                    <div className="flex items-center justify-between p-3 rounded-2xl bg-blue-900/10 border border-blue-500/20 transition-all hover:bg-blue-900/20 mt-3">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${isNotionEnabled ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-500'}`}>
+                          <i className="fas fa-book text-xs"></i>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-wider text-white leading-none">Notion Integration</p>
+                          <p className="text-[8px] text-slate-500 mt-1 uppercase font-bold tracking-widest">{isNotionEnabled ? (!notionConfig.selectedResources.length ? 'Select Pages' : `${notionConfig.selectedResources.length} Pages Active`) : 'Connect Knowledge'}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {/* Config Gear - Only visible when enabled AND allowed */}
+                        {isNotionEnabled && canUseNotion && (
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setShowNotionConfig(true);
+                            }}
+                            className="w-6 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-500 hover:text-white flex items-center justify-center transition-colors border border-slate-700 hover:border-slate-500"
+                            title="Configure Notion Pages"
+                          >
+                            <i className="fas fa-cog text-[10px]"></i>
+                          </button>
+                        )}
+                        <label className="relative inline-flex items-center cursor-pointer group/lock">
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={isNotionEnabled}
+                            disabled={!canUseNotion}
+                            onChange={() => {
+                              const nextState = !isNotionEnabled;
+                              if (nextState && (!notionConfig.accessToken || !notionConfig.selectedResources.length)) {
+                                setShowNotionConfig(true);
+                              } else {
+                                setIsNotionEnabled(nextState);
+                              }
+                            }}
+                          />
+                          <div className={`w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 ${!canUseNotion ? 'opacity-50' : ''}`}></div>
+                          {!canUseNotion && <i className="fas fa-lock text-blue-500 text-xs absolute -left-5"></i>}
+                        </label>
+                      </div>
                     </div>
 
                     {/* Figma Context Toggle (Epics Stage) - Below Grounding */}
@@ -3554,6 +3671,17 @@ ${commentsData.map((c: any) => `- [${c.user}]: ${c.message} (${c.resolved ? 'Res
         }}
         initialAccessToken={figmaConfig.accessToken}
         initialFileKey={figmaConfig.fileKey}
+      />
+
+      {/* Notion Config Modal (All Stages) */}
+      <NotionConfigModal
+        isOpen={showNotionConfig}
+        onClose={() => setShowNotionConfig(false)}
+        config={notionConfig}
+        onSave={(newConfig) => {
+          setNotionConfig(newConfig);
+          if (!isNotionEnabled) setIsNotionEnabled(true);
+        }}
       />
 
       {/* ESTIMATION STUDIO FULL SCREEN OVERLAY */}

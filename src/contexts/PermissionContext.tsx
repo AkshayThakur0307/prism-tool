@@ -19,6 +19,7 @@ export const FEATURE_DEFINITIONS = {
     canCustomizeInstructions: { label: 'Customize System Instructions', default: ['pro', 'admin'] },
     canUseEnterpriseRAG: { label: 'Enterprise RAG (Pinecone)', default: ['pro', 'admin'] },
     canUseFigma: { label: 'Figma Integration', default: ['pro', 'admin'] },
+    canUseNotion: { label: 'Notion Integration', default: ['pro', 'admin'] },
 };
 
 export type FeatureKey = keyof typeof FEATURE_DEFINITIONS;

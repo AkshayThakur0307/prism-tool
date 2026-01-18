@@ -132,6 +132,24 @@ export default defineConfig(({ mode }) => {
               console.error('[Figma Proxy Error]', err);
             });
           }
+        },
+        '/notion-api': {
+          target: 'https://api.notion.com/v1',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/notion-api/, ''),
+          secure: false,
+          configure: (proxy, options) => {
+            proxy.on('proxyReq', (proxyReq, req: any, res) => {
+              console.log(`[Notion Proxy] ${req.method} ${req.url} -> api.notion.com`);
+              proxyReq.removeHeader('Cookie');
+              proxyReq.removeHeader('Origin');
+              proxyReq.removeHeader('Referer');
+              // Ensure version header if client forgets
+              if (!proxyReq.getHeader('Notion-Version')) {
+                proxyReq.setHeader('Notion-Version', '2022-06-28');
+              }
+            });
+          }
         }
       }
     },
