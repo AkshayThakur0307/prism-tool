@@ -2679,7 +2679,16 @@ ${confluenceCapture}
                           <i className="fas fa-brain text-xs"></i>
                         </div>
                         <div>
-                          <p className="text-[10px] font-black uppercase tracking-wider text-white leading-none">Thinking Mode</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-[10px] font-black uppercase tracking-wider text-white leading-none">Thinking Mode</p>
+                            <div className="group relative">
+                              <i className="fas fa-info-circle text-[9px] text-indigo-400/50 hover:text-indigo-400 cursor-help transition-colors"></i>
+                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
+                                <p className="text-[9px] text-slate-300 leading-relaxed font-medium">Enables enhanced reasoning capabilities for complex problem-solving.</p>
+                                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-700"></div>
+                              </div>
+                            </div>
+                          </div>
                           <p className="text-[8px] text-slate-500 mt-1 uppercase font-bold tracking-widest">Enhanced Synthesis</p>
                         </div>
                       </div>
@@ -2792,7 +2801,16 @@ ${confluenceCapture}
                           <i className="fas fa-search text-xs"></i>
                         </div>
                         <div>
-                          <p className="text-[10px] font-black uppercase tracking-wider text-white leading-none">Research Grounding</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-[10px] font-black uppercase tracking-wider text-white leading-none">Research Grounding</p>
+                            <div className="group relative">
+                              <i className="fas fa-info-circle text-[9px] text-amber-400/50 hover:text-amber-400 cursor-help transition-colors"></i>
+                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
+                                <p className="text-[9px] text-slate-300 leading-relaxed font-medium">Validates responses against external sources for accuracy.</p>
+                                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-700"></div>
+                              </div>
+                            </div>
+                          </div>
                           <p className="text-[8px] text-slate-500 mt-1 uppercase font-bold tracking-widest">External Validation</p>
                         </div>
                       </div>
@@ -2810,7 +2828,7 @@ ${confluenceCapture}
                     </div>
 
                     {/* Knowledge Base Toggle - Parent */}
-                    <div className="flex flex-col bg-slate-900/40 border border-slate-800 rounded-2xl overflow-hidden mt-3 transition-colors hover:border-indigo-500/30">
+                    <div className="flex flex-col bg-slate-900/40 border border-slate-800 rounded-2xl mt-3 transition-colors hover:border-indigo-500/30">
                       {/* Parent Header */}
                       <div className="flex items-center justify-between p-3 bg-slate-950/30">
                         <div className="flex items-center gap-3">
@@ -2818,7 +2836,16 @@ ${confluenceCapture}
                             <i className="fas fa-layer-group text-xs"></i>
                           </div>
                           <div>
-                            <p className="text-[10px] font-black uppercase tracking-wider text-white leading-none">Knowledge Base</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-[10px] font-black uppercase tracking-wider text-white leading-none">Knowledge Base</p>
+                              <div className="group relative">
+                                <i className="fas fa-info-circle text-[9px] text-indigo-400/50 hover:text-indigo-400 cursor-help transition-colors"></i>
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
+                                  <p className="text-[9px] text-slate-300 leading-relaxed font-medium">Connects to your company's third party knowledge bases for context-aware answers.</p>
+                                  <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-700"></div>
+                                </div>
+                              </div>
+                            </div>
                             <p className="text-[8px] text-slate-500 mt-1 uppercase font-bold tracking-widest">
                               {isKnowledgeBaseActive ? 'Sources Active' : 'Connect Data'}
                             </p>
@@ -2918,7 +2945,16 @@ ${confluenceCapture}
                             <i className="fab fa-figma text-xs"></i>
                           </div>
                           <div>
-                            <p className="text-[10px] font-black uppercase tracking-wider text-white leading-none">Figma Context</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-[10px] font-black uppercase tracking-wider text-white leading-none">Figma Context</p>
+                              <div className="group relative">
+                                <i className="fab fa-figma text-[9px] text-purple-400/50 hover:text-purple-400 cursor-help transition-colors"></i>
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
+                                  <p className="text-[9px] text-slate-300 leading-relaxed font-medium">Connects to your Figma designs to extract visual requirements.</p>
+                                  <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-700"></div>
+                                </div>
+                              </div>
+                            </div>
                             <p className="text-[8px] text-slate-500 mt-1 uppercase font-bold tracking-widest">{isFigmaEpicsEnabled ? 'Design Data Active' : 'Link Design Params'}</p>
                           </div>
                         </div>
