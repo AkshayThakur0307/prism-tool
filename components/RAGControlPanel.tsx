@@ -41,7 +41,7 @@ export const RAGControlPanel: React.FC<RAGControlPanelProps> = ({ currentStage, 
     const { canUseEnterpriseRAG } = useRBAC();
 
     return (
-        <div className="bg-slate-900/50 rounded-xl border border-slate-700/50 p-3 mb-4 relative overflow-hidden">
+        <div className="bg-slate-900/50 rounded-xl border border-slate-700/50 p-3 mb-4 relative">
             {/* RBAC Lock Overlay */}
             {!canUseEnterpriseRAG && (
                 <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-[1px] z-20 flex flex-col items-center justify-center text-center p-4 border border-indigo-500/20 rounded-xl">
@@ -60,7 +60,20 @@ export const RAGControlPanel: React.FC<RAGControlPanelProps> = ({ currentStage, 
                     <i className="fas fa-network-wired text-indigo-400 text-xs"></i>
                 </div>
                 <div>
-                    <h3 className="text-xs font-bold text-indigo-100 uppercase tracking-wider">Enterprise Context (RAG)</h3>
+                    <h3 className="text-xs font-bold text-indigo-100 uppercase tracking-wider flex items-center gap-2">
+                        Enterprise Context (RAG)
+                        <div className="relative group">
+                            <i className="fas fa-info-circle text-slate-500 hover:text-indigo-400 cursor-help transition-colors"></i>
+                            {/* Tooltip */}
+                            <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-64 p-2 bg-slate-900 border border-slate-700 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                                <p className="text-[10px] text-slate-300 leading-relaxed font-normal normal-case tracking-normal">
+                                    Retrieval-Augmented Generation (RAG) injects relevant context from your company's knowledge bases. Use this to ground the AI in your company's strategy, history, and data.
+                                </p>
+                                {/* Arrow */}
+                                <div className="absolute left-1/2 -translate-x-1/2 top-full w-2 h-2 bg-slate-900 border-r border-b border-slate-700 transform rotate-45 -mt-1"></div>
+                            </div>
+                        </div>
+                    </h3>
                     <p className="text-[10px] text-slate-400">Select knowledge bases to ground the AI response</p>
                 </div>
             </div>
