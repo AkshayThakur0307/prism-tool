@@ -66,8 +66,10 @@ export async function callGeminiAgent(
 
   if (enabledNamespaces && enabledNamespaces.length > 0) {
     console.log(`[RAG] Processing ${enabledNamespaces.length} active namespaces:`, enabledNamespaces);
-    // Simple query extraction for RAG: Use whole prompt if string, or first part if array
-    const queryForRag = typeof userPrompt === 'string' ? userPrompt : (userPrompt[0]?.text || '');
+    // Simple query extraction for RAG: Use whole prompt if string, or combine Global Context (0) + Active Input (1) if array
+    const queryForRag = typeof userPrompt === 'string'
+      ? userPrompt
+      : ((userPrompt[0]?.text || '') + '\n\n' + (userPrompt[1]?.text || '')).trim();
 
     // Iterate through all enabled namespaces and fetch context
     const ragPromises = enabledNamespaces.map(async (ns) => {
