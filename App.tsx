@@ -116,6 +116,7 @@ const App: React.FC = () => {
 
   // New UI States
   const [toast, setToast] = useState<{ message: string, type: ToastType } | null>(null);
+  const [historyAlert, setHistoryAlert] = useState<{ isOpen: boolean; message: string } | null>(null);
   const [confirmation, setConfirmation] = useState<{
     type: 'RESET' | 'RESTORE' | 'DISCARD_REFINEMENT' | 'DISCARD_EDIT' | 'CANCEL_EDIT' | 'JIRA_SYNC_SUCCESS';
     payload?: any;
@@ -793,7 +794,10 @@ const App: React.FC = () => {
     const currIdx = stages.indexOf(state.currentStage);
 
     if (currIdx === 0) {
-      alert("No history to import: You are currently in the initial module.");
+      setHistoryAlert({
+        isOpen: true,
+        message: "No history to import: You are currently in the initial module."
+      });
       return;
     }
 
@@ -801,7 +805,10 @@ const App: React.FC = () => {
     const availableHistory = previousStages.filter(s => state.stages[s].output);
 
     if (availableHistory.length === 0) {
-      alert("History unavailable: Please complete a previous module first.");
+      setHistoryAlert({
+        isOpen: true,
+        message: "History unavailable: Please complete a previous module first."
+      });
       return;
     }
 
@@ -4187,6 +4194,15 @@ ${confluenceCapture}
         stage={state.currentStage}
         currentInstruction={customInstructions[state.currentStage]}
         onSave={handleSaveInstruction}
+      />
+      <ConfirmationModal
+        isOpen={!!historyAlert}
+        onClose={() => setHistoryAlert(null)}
+        onConfirm={() => setHistoryAlert(null)}
+        title="Import History"
+        message={historyAlert?.message || ""}
+        confirmLabel="OK"
+        cancelLabel=""
       />
     </div>
   );
