@@ -61,7 +61,7 @@ export const ProjectConfigModal: React.FC<ProjectConfigModalProps> = ({
                                 readOnly={!canEdit}
                                 value={projectMetadata.companyName}
                                 onChange={(e) => onMetadataChange('companyName', e.target.value)}
-                                className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-xs text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder:text-xs focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 placeholder="e.g. Material+"
                             />
                         </div>
@@ -72,7 +72,7 @@ export const ProjectConfigModal: React.FC<ProjectConfigModalProps> = ({
                                 readOnly={!canEdit}
                                 value={projectMetadata.targetVertical}
                                 onChange={(e) => onMetadataChange('targetVertical', e.target.value)}
-                                className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-xs text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder:text-xs focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 placeholder="e.g. Fintech, Media, Sports"
                             />
                         </div>
@@ -83,7 +83,7 @@ export const ProjectConfigModal: React.FC<ProjectConfigModalProps> = ({
                                 readOnly={!canEdit}
                                 value={projectMetadata.geography}
                                 onChange={(e) => onMetadataChange('geography', e.target.value)}
-                                className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-xs text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder:text-xs focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 placeholder="e.g. NA, EMEA, Global..."
                             />
                         </div>
@@ -94,7 +94,7 @@ export const ProjectConfigModal: React.FC<ProjectConfigModalProps> = ({
                                 readOnly={!canEdit}
                                 value={projectMetadata.tam}
                                 onChange={(e) => onMetadataChange('tam', e.target.value)}
-                                className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-xs text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder:text-xs focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 placeholder="Market size or growth goal..."
                             />
                         </div>
@@ -105,7 +105,7 @@ export const ProjectConfigModal: React.FC<ProjectConfigModalProps> = ({
                                 readOnly={!canEdit}
                                 value={projectMetadata.revenueModel}
                                 onChange={(e) => onMetadataChange('revenueModel', e.target.value)}
-                                className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-xs text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder:text-xs focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 placeholder="e.g. Subscription, Ad-led..."
                             />
                         </div>
@@ -116,7 +116,7 @@ export const ProjectConfigModal: React.FC<ProjectConfigModalProps> = ({
                                 readOnly={!canEdit}
                                 value={projectMetadata.websiteUrls}
                                 onChange={(e) => onMetadataChange('websiteUrls', e.target.value)}
-                                className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-xs text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder:text-xs focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 placeholder="URLs for business context..."
                             />
                         </div>
@@ -129,7 +129,7 @@ export const ProjectConfigModal: React.FC<ProjectConfigModalProps> = ({
                             readOnly={!canEdit}
                             value={projectMetadata.keyCompetitors}
                             onChange={(e) => onMetadataChange('keyCompetitors', e.target.value)}
-                            className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-xs text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all resize-none ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder:text-xs focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all resize-none ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
                             placeholder="Who are we competing with?"
                         />
                     </div>
@@ -141,17 +141,24 @@ export const ProjectConfigModal: React.FC<ProjectConfigModalProps> = ({
                             readOnly={!canEdit}
                             value={projectMetadata.missionStatement}
                             onChange={(e) => onMetadataChange('missionStatement', e.target.value)}
-                            className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-xs text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all resize-none ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder:text-xs focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all resize-none ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
                             placeholder="Ultimate vision for this project..."
                         />
                     </div>
                 </div>
 
                 {/* Footer */}
-                <div className="p-6 border-t border-slate-700 bg-slate-900/50 flex justify-end">
+                <div className="p-6 border-t border-slate-700 bg-slate-900/50 flex items-center justify-between gap-8 shrink-0">
+                    <div className="flex items-center gap-3 text-slate-500 max-w-2xl">
+                        <i className="fas fa-circle-info text-cyan-400 text-sm"></i>
+                        <p className="text-[11px] leading-relaxed">
+                            <span className="text-slate-300 font-semibold uppercase tracking-wider text-[10px]">Context Value:</span> This foundational metadata acts as the "North Star" for all AI agents.
+                            Providing these details ensures that market simulations, user personas, and strategic outputs are precisely tailored to your specific business landscape and mission.
+                        </p>
+                    </div>
                     <button
                         onClick={onClose}
-                        className="px-6 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs uppercase tracking-wider transition-all"
+                        className="px-6 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs uppercase tracking-wider transition-all whitespace-nowrap shadow-lg border border-slate-700/50"
                     >
                         Done
                     </button>
