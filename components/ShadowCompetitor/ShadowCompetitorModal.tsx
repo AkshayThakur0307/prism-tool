@@ -518,7 +518,7 @@ export const ShadowCompetitorModal: React.FC<Props> = ({ isOpen, onClose, domain
                                                     onChange={(e) => setCurrentInput(e.target.value)}
                                                     onKeyPress={(e) => e.key === 'Enter' && handleAddCompetitor()}
                                                     placeholder="e.g., Salesforce Inc., Infosys Limited..."
-                                                    className="flex-1 px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                                                    className="flex-1 px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500 outline-none text-xs"
                                                     disabled={competitors.length >= 5}
                                                 />
                                                 <button
