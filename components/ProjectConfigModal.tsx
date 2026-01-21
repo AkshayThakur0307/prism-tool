@@ -61,7 +61,7 @@ export const ProjectConfigModal: React.FC<ProjectConfigModalProps> = ({
                                 readOnly={!canEdit}
                                 value={projectMetadata.companyName}
                                 onChange={(e) => onMetadataChange('companyName', e.target.value)}
-                                className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-xs text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 placeholder="e.g. Material+"
                             />
                         </div>
@@ -72,7 +72,7 @@ export const ProjectConfigModal: React.FC<ProjectConfigModalProps> = ({
                                 readOnly={!canEdit}
                                 value={projectMetadata.targetVertical}
                                 onChange={(e) => onMetadataChange('targetVertical', e.target.value)}
-                                className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-xs text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 placeholder="e.g. Fintech, Media, Sports"
                             />
                         </div>
@@ -83,7 +83,7 @@ export const ProjectConfigModal: React.FC<ProjectConfigModalProps> = ({
                                 readOnly={!canEdit}
                                 value={projectMetadata.geography}
                                 onChange={(e) => onMetadataChange('geography', e.target.value)}
-                                className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-xs text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 placeholder="e.g. NA, EMEA, Global..."
                             />
                         </div>
@@ -94,7 +94,7 @@ export const ProjectConfigModal: React.FC<ProjectConfigModalProps> = ({
                                 readOnly={!canEdit}
                                 value={projectMetadata.tam}
                                 onChange={(e) => onMetadataChange('tam', e.target.value)}
-                                className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-xs text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 placeholder="Market size or growth goal..."
                             />
                         </div>
@@ -105,7 +105,7 @@ export const ProjectConfigModal: React.FC<ProjectConfigModalProps> = ({
                                 readOnly={!canEdit}
                                 value={projectMetadata.revenueModel}
                                 onChange={(e) => onMetadataChange('revenueModel', e.target.value)}
-                                className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-xs text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 placeholder="e.g. Subscription, Ad-led..."
                             />
                         </div>
@@ -116,7 +116,7 @@ export const ProjectConfigModal: React.FC<ProjectConfigModalProps> = ({
                                 readOnly={!canEdit}
                                 value={projectMetadata.websiteUrls}
                                 onChange={(e) => onMetadataChange('websiteUrls', e.target.value)}
-                                className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-xs text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 placeholder="URLs for business context..."
                             />
                         </div>
@@ -129,7 +129,7 @@ export const ProjectConfigModal: React.FC<ProjectConfigModalProps> = ({
                             readOnly={!canEdit}
                             value={projectMetadata.keyCompetitors}
                             onChange={(e) => onMetadataChange('keyCompetitors', e.target.value)}
-                            className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all resize-none ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-xs text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all resize-none ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
                             placeholder="Who are we competing with?"
                         />
                     </div>
@@ -141,7 +141,7 @@ export const ProjectConfigModal: React.FC<ProjectConfigModalProps> = ({
                             readOnly={!canEdit}
                             value={projectMetadata.missionStatement}
                             onChange={(e) => onMetadataChange('missionStatement', e.target.value)}
-                            className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all resize-none ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            className={`w-full bg-slate-950/40 border border-slate-800 rounded-xl p-3 text-xs text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all resize-none ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
                             placeholder="Ultimate vision for this project..."
                         />
                     </div>
