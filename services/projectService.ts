@@ -273,5 +273,55 @@ export const projectService = {
             },
             updatedAt: Date.now()
         }, { merge: true });
+    },
+
+    // --- SHADOW COMPETITOR PERSISTENCE ---
+
+    // Save a completed analysis
+    saveShadowAnalysis: async (projectId: string, analysis: any, competitors: string[]): Promise<void> => {
+        try {
+            const analysesRef = collection(db, PROJECTS_COLLECTION, projectId, 'competitor_analyses');
+            // Create a dedicated doc ID or auto-gen
+            const newDoc = doc(analysesRef);
+
+            await setDoc(newDoc, {
+                id: newDoc.id,
+                timestamp: Date.now(),
+                competitors: competitors,
+                region: analysis.dna[0]?.financialFlexibility?.classification ? 'Global' : 'Unknown', // Basic metadata
+                result: analysis,
+                summary: `Analysis of ${competitors.length} competitors (${competitors.join(', ')})`
+            });
+        } catch (error) {
+            console.error("Error saving shadow analysis:", error);
+            throw error;
+        }
+    },
+
+    // Get analysis history
+    getShadowAnalysisHistory: async (projectId: string): Promise<any[]> => {
+        try {
+            const analysesRef = collection(db, PROJECTS_COLLECTION, projectId, 'competitor_analyses');
+            const q = query(analysesRef, orderBy('timestamp', 'desc'));
+            const snapshot = await getDocs(q);
+
+            return snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+        } catch (error) {
+            console.error("Error fetching shadow history:", error);
+            return [];
+        }
+    },
+
+    // Delete an analysis
+    deleteShadowAnalysis: async (projectId: string, analysisId: string): Promise<void> => {
+        try {
+            await deleteDoc(doc(db, PROJECTS_COLLECTION, projectId, 'competitor_analyses', analysisId));
+        } catch (error) {
+            console.error("Error deleting shadow analysis:", error);
+            throw error;
+        }
     }
 };

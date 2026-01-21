@@ -100,6 +100,30 @@ export interface StageData {
   // Confluence Integration
   isConfluenceEnabled?: boolean;
   confluenceConfig?: ConfluenceConfig;
+
+  // Shadow Competitor Simulation Engine
+  shadowCompetitorAnalysis?: {
+    status: 'idle' | 'running' | 'paused' | 'completed' | 'error';
+    competitors: Array<{
+      name: string;
+      region: string;
+      regulatoryBody: string;
+      confidence: string;
+    }>;
+    progress: {
+      phase: 1 | 2 | 3;
+      overall: number;
+      perCompetitor: Record<string, number>;
+    };
+    results?: {
+      dna: any[];
+      warGaming: any[];
+      moat: any;
+      citations: any[];
+      fullReport: string;
+    };
+    lastRun?: number;
+  };
 }
 
 export interface NotionResource {

@@ -29,6 +29,7 @@ import NotionConfigModal from './components/NotionConfigModal'; // New
 import { ConfluenceConfigModal } from './components/ConfluenceConfigModal';
 import { ConfluenceConfig } from './types';
 import { CONFLUENCE_TOOLS, confluenceAgent } from './services/confluenceAgent';
+import { ShadowCompetitorModal } from './components/ShadowCompetitor/ShadowCompetitorModal';
 import { marked } from 'marked';
 import { useAuth } from './src/contexts/AuthContext';
 import { useRBAC } from './src/hooks/useRBAC';
@@ -357,6 +358,9 @@ const App: React.FC = () => {
       }
     }
   }, [state.currentStage, activeProjectId]);
+
+  // Shadow Competitor Modal State
+  const [showShadowCompetitorModal, setShowShadowCompetitorModal] = useState(false);
 
   // Output Editing & Refinement
   const [isEditingOutput, setIsEditingOutput] = useState(false);
@@ -1948,14 +1952,14 @@ ${confluenceCapture}
         )}
       </div>
 
-      <div className={`flex-1 ${isCollapsed ? 'space-y-2' : 'space-y-4'}`}>
+      <div className={`flex-1 overflow-y-auto ${isCollapsed ? 'space-y-2' : 'space-y-4'}`}>
         <button
           onClick={() => setShowProjectConfig(true)}
-          className={`w-full text-left rounded-2xl transition-all duration-300 group relative flex items-center gap-4 overflow-hidden border border-dashed border-indigo-500/30 hover:bg-indigo-600/10 hover:border-indigo-500 text-indigo-400 ${isCollapsed ? 'p-2 justify-center' : 'p-4'}`}
+          className={`w-full text-left rounded-xl transition-all duration-300 group relative flex items-center gap-3 overflow-hidden border border-dashed border-indigo-500/30 hover:bg-indigo-600/10 hover:border-indigo-500 text-indigo-400 ${isCollapsed ? 'p-2 justify-center' : 'px-3 py-2.5'}`}
           title={isCollapsed ? "Global Context" : undefined}
         >
-          <div className="w-10 h-10 rounded-xl bg-indigo-600/10 flex items-center justify-center shrink-0">
-            <i className="fas fa-briefcase"></i>
+          <div className="w-8 h-8 rounded-lg bg-indigo-600/10 flex items-center justify-center shrink-0">
+            <i className="fas fa-briefcase text-xs"></i>
           </div>
           {!isCollapsed && (
             <div className="flex-1 min-w-0 animate-in fade-in duration-300">
@@ -1965,6 +1969,28 @@ ${confluenceCapture}
           )}
           {!isCollapsed && <i className="fas fa-cog text-xs opacity-50"></i>}
         </button>
+
+        <div className={`h-[1px] bg-slate-800/50 mx-2 my-2 ${isCollapsed ? 'mx-4' : ''}`}></div>
+
+        {/* Shadow Competitor CTA - Below Global Context */}
+        {canEditProject && (
+          <button
+            onClick={() => setShowShadowCompetitorModal(true)}
+            className={`w-full text-left rounded-xl transition-all duration-300 group relative flex items-center gap-3 overflow-hidden bg-gradient-to-r from-indigo-700/10 to-indigo-900/10 backdrop-blur-md border border-indigo-600/30 hover:bg-indigo-600/20 hover:border-indigo-500 text-indigo-300 hover:text-indigo-200 ${isCollapsed ? 'p-2 justify-center' : 'px-3 py-2.5'}`}
+            title={isCollapsed ? "Competitive Analysis" : "Run competitive intelligence analysis"}
+          >
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-700/20 to-indigo-900/20 flex items-center justify-center shrink-0 border border-indigo-600/50">
+              <i className="fas fa-project-diagram text-xs"></i>
+            </div>
+            {!isCollapsed && (
+              <div className="flex-1 min-w-0 animate-in fade-in duration-300">
+                <div className="text-[10px] font-semibold uppercase tracking-wider opacity-70">Competitive Intel</div>
+                <div className="text-[11px] font-semibold truncate">Strategic Analysis</div>
+              </div>
+            )}
+            {!isCollapsed && <i className="fas fa-arrow-right text-xs opacity-50"></i>}
+          </button>
+        )}
 
         <div className={`h-[1px] bg-slate-800/50 mx-2 my-2 ${isCollapsed ? 'mx-4' : ''}`}></div>
 
@@ -1989,13 +2015,13 @@ ${confluenceCapture}
                 setIsMobileMenuOpen(false);
                 setShowHistory(false);
               }}
-              className={`w-full text-left rounded-2xl transition-all duration-300 group relative flex items-center gap-4 overflow-hidden border
+              className={`w-full text-left rounded-xl transition-all duration-300 group relative flex items-center gap-3 overflow-hidden border
                 ${isActive ? 'bg-indigo-600/10 border-indigo-500/50 text-white shadow-inner' : 'hover:bg-slate-800/40 text-slate-500 border-transparent'}
-                ${isCollapsed ? 'p-2 justify-center' : 'p-4'}
+                ${isCollapsed ? 'p-2 justify-center' : 'px-3 py-2.5'}
               `}
               title={isCollapsed ? stageConfig.title : undefined}
             >
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm transition-all duration-500 shrink-0
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs transition-all duration-500 shrink-0
                 ${isActive ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : isDone ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-slate-800/50 text-slate-600 border border-slate-700/50'}
               `}>
                 {isAnalyzing ? (
@@ -4203,6 +4229,14 @@ ${confluenceCapture}
         message={historyAlert?.message || ""}
         confirmLabel="OK"
         cancelLabel=""
+      />
+
+      {/* Shadow Competitor Simulation Engine Modal */}
+      <ShadowCompetitorModal
+        isOpen={showShadowCompetitorModal}
+        onClose={() => setShowShadowCompetitorModal(false)}
+        domainInput={state.stages[DiscoveryStage.DOMAIN].input}
+        projectId={activeProjectId}
       />
     </div>
   );
