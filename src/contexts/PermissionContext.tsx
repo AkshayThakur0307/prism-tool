@@ -20,6 +20,7 @@ export const FEATURE_DEFINITIONS = {
     canUseEnterpriseRAG: { label: 'Enterprise RAG (Pinecone)', default: ['pro', 'admin'] },
     canUseFigma: { label: 'Figma Integration', default: ['pro', 'admin'] },
     canUseNotion: { label: 'Notion Integration', default: ['pro', 'admin'] },
+    canUseShadowCompetitor: { label: 'Shadow Competitor Intelligence', default: ['pro', 'admin'] },
 };
 
 export type FeatureKey = keyof typeof FEATURE_DEFINITIONS;

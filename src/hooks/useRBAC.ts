@@ -29,6 +29,7 @@ export const useRBAC = () => {
         canUseEnterpriseRAG: hasAccess('canUseEnterpriseRAG'),
         canUseFigma: hasAccess('canUseFigma'),
         canUseNotion: hasAccess('canUseNotion'),
+        canUseShadowCompetitor: hasAccess('canUseShadowCompetitor'),
 
         // Export / Integrations
         canExportData: hasAccess('canExportData'),

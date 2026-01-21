@@ -92,7 +92,7 @@ const ModelSelector: React.FC<{ value: string; onChange: (val: string) => void; 
 
 const App: React.FC = () => {
   const { logout, user } = useAuth();
-  const { role, canUseAdvancedAI, canExportData, canUseRefinementStudio, canEditProject, isAdmin, canShareProject, canSyncJira, canUseEstimationStudio, canManageStageIterations, canCustomizeInstructions, canUseFigma, canUseNotion } = useRBAC();
+  const { role, canUseAdvancedAI, canExportData, canUseRefinementStudio, canEditProject, isAdmin, canShareProject, canSyncJira, canUseEstimationStudio, canManageStageIterations, canCustomizeInstructions, canUseFigma, canUseNotion, canUseShadowCompetitor } = useRBAC();
 
   // DEBUG: Permission Tracing
   useEffect(() => {
@@ -1973,7 +1973,7 @@ ${confluenceCapture}
         <div className={`h-[1px] bg-slate-800/50 mx-2 my-2 ${isCollapsed ? 'mx-4' : ''}`}></div>
 
         {/* Shadow Competitor CTA - Below Global Context */}
-        {canEditProject && (
+        {canUseShadowCompetitor && (
           <button
             onClick={() => setShowShadowCompetitorModal(true)}
             className={`w-full text-left rounded-xl transition-all duration-300 group relative flex items-center gap-3 overflow-hidden bg-gradient-to-r from-indigo-700/10 to-indigo-900/10 backdrop-blur-md border border-indigo-600/30 hover:bg-indigo-600/20 hover:border-indigo-500 text-indigo-300 hover:text-indigo-200 ${isCollapsed ? 'p-2 justify-center' : 'px-3 py-2.5'}`}

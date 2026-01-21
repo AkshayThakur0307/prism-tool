@@ -40,6 +40,7 @@ const ProductManual: React.FC<ProductManualProps> = ({ onClose }) => {
               { id: 'pm-intelligence', label: 'AI Controls' },
               { id: 'pm-interaction', label: 'User Interaction' },
               { id: 'pm-advanced_features', label: 'Advanced Features' },
+              { id: 'pm-shadow_competitor', label: 'Shadow Competitor', colorClass: 'text-indigo-400 hover:text-indigo-300' },
               { id: 'pm-productivity', label: 'Productivity Suite' },
               { id: 'pm-rbac_matrix', label: 'RBAC Matrix', colorClass: 'text-emerald-400 hover:text-emerald-300' }
             ].map(item => (
@@ -322,10 +323,55 @@ const ProductManual: React.FC<ProductManualProps> = ({ onClose }) => {
               </div>
             </section>
 
-            {/* 7. PRODUCTIVITY SUITE */}
-            <section id="pm-productivity" className="space-y-6">
+
+
+            {/* 7. SHADOW COMPETITOR (NEW) */}
+            <section id="pm-shadow_competitor" className="space-y-6">
               <div className="flex items-center gap-4 border-b border-indigo-500/20 pb-4">
                 <span className="text-3xl font-black text-indigo-500/50">07.</span>
+                <h3 className="text-2xl font-black text-white uppercase tracking-tight">Shadow Competitor Intelligence</h3>
+              </div>
+              <p className="text-slate-400 leading-relaxed mb-6">
+                An advanced market war-gaming engine that creates a "Shadow" version of your product to simulate head-to-head battles against real-world competitors.
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 hover:border-blue-500/30 transition-all">
+                  <h6 className="text-[12px] font-black text-white uppercase tracking-widest mb-2 flex items-center gap-2">
+                    <i className="fas fa-search-dollar text-blue-500"></i> Automated Recon
+                  </h6>
+                  <p className="text-[11px] text-slate-400 leading-relaxed mb-3">
+                    Instantly extracts "Competitor DNA" from public filings (10-K), news reports, and market signals. Analyzes Cash Reserves, R&D Velocity, and Strategic Moats without manual research.
+                  </p>
+                </div>
+
+                <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 hover:border-red-500/30 transition-all">
+                  <h6 className="text-[12px] font-black text-white uppercase tracking-widest mb-2 flex items-center gap-2">
+                    <i className="fas fa-chess-knight text-red-500"></i> War-Gaming Simulation
+                  </h6>
+                  <p className="text-[11px] text-slate-400 leading-relaxed mb-3">
+                    Pit your current roadmap against the competitor's DNA. The AI simulates a "Market Response" to predict how they would counter-attack your launch, highlighting vulnerabilities in your strategy.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-indigo-900/10 border border-indigo-500/20 mt-4">
+                <div className="flex items-start gap-3">
+                  <i className="fas fa-trophy text-amber-400 mt-1"></i>
+                  <div>
+                    <h6 className="text-[11px] font-black text-white uppercase mb-1">Scoring & Benchmarking</h6>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      Generates a quantitative 1-10 scorecard comparing Financial Speed, Product Moat, and Execution Risk. WARNING: If no strategic baseline is provided, user scores default to 1/10 to reflect a lack of defined strategy.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* 8. PRODUCTIVITY SUITE */}
+            <section id="pm-productivity" className="space-y-6">
+              <div className="flex items-center gap-4 border-b border-indigo-500/20 pb-4">
+                <span className="text-3xl font-black text-indigo-500/50">08.</span>
                 <h3 className="text-2xl font-black text-white uppercase tracking-tight">User Productivity Suite</h3>
               </div>
               <p className="text-slate-400 leading-relaxed mb-6">Built-in power tools designed to give you granular control over the AI's behavior and output structure.</p>
@@ -381,10 +427,10 @@ const ProductManual: React.FC<ProductManualProps> = ({ onClose }) => {
               </div>
             </section>
 
-            {/* 8. RBAC MATRIX */}
+            {/* 9. RBAC MATRIX */}
             <section id="pm-rbac_matrix" className="space-y-6">
               <div className="flex items-center gap-4 border-b border-emerald-500/20 pb-4">
-                <span className="text-3xl font-black text-emerald-500/50">08.</span>
+                <span className="text-3xl font-black text-emerald-500/50">09.</span>
                 <h3 className="text-2xl font-black text-white uppercase tracking-tight">Role-Based Access Control (RBAC)</h3>
               </div>
               <p className="text-slate-400 leading-relaxed mb-6">Detailed permissions breakdown for each license tier. Roles are assigned by System Administrators via the User Management panel.</p>
@@ -449,6 +495,13 @@ const ProductManual: React.FC<ProductManualProps> = ({ onClose }) => {
 
                     {/* Advanced Features */}
                     <tr className="border-b border-slate-800/50">
+                      <td className="p-4 font-bold text-white">Shadow Competitor</td>
+                      <td className="p-4 text-center"><i className="fas fa-times text-slate-700"></i></td>
+                      <td className="p-4 text-center"><i className="fas fa-lock text-slate-600"></i></td>
+                      <td className="p-4 text-center"><i className="fas fa-check text-emerald-500"></i></td>
+                      <td className="p-4 text-center"><i className="fas fa-check text-emerald-500"></i></td>
+                    </tr>
+                    <tr className="border-b border-slate-800/50">
                       <td className="p-4 font-bold text-white">Jira Sync</td>
                       <td className="p-4 text-center"><i className="fas fa-times text-slate-700"></i></td>
                       <td className="p-4 text-center"><i className="fas fa-lock text-slate-600"></i></td>
@@ -504,7 +557,7 @@ const ProductManual: React.FC<ProductManualProps> = ({ onClose }) => {
           </div>
         </div>
       </div>
-    </div >
+    </div>
   );
 };
 
