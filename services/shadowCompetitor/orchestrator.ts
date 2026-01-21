@@ -493,10 +493,14 @@ Output STRICT JSON string array: ["Rec 1", "Rec 2", "Rec 3"]`;
     }
 
     private async compareHeadToHead(dna: CompetitorDNA, roadmap: string): Promise<HeadToHeadComparison> {
+        const isRoadmapMissing = !roadmap || roadmap.trim().length === 0;
         const prompt = `Perform a head-to-head benchmarking between the User (Project Roadmap) and ${dna.name} (Competitor).
 
-User Roadmap: ${roadmap}
+User Roadmap: ${isRoadmapMissing ? "UNDEFINED / MISSING" : roadmap}
 Competitor Context: ${JSON.stringify(dna)}
+
+CRITICAL SCORING RULE:
+${isRoadmapMissing ? "- Since User Roadmap is MISSING, the 'userScore' MUST be exactly 1 for ALL categories. The user has no strategy defined." : "- Score fairly based on the roadmap provided."}
 
 Output STRICT JSON matching this schema:
 {
