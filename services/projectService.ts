@@ -278,17 +278,27 @@ export const projectService = {
     // --- SHADOW COMPETITOR PERSISTENCE ---
 
     // Save a completed analysis
-    saveShadowAnalysis: async (projectId: string, analysis: any, competitors: string[]): Promise<void> => {
+    // Save a completed or aborted analysis
+    saveShadowAnalysis: async (
+        projectId: string,
+        analysis: any,
+        competitors: string[],
+        status: 'completed' | 'aborted' = 'completed',
+        userContext: string = '',
+        competitorData: any[] = []
+    ): Promise<void> => {
         try {
             const analysesRef = collection(db, PROJECTS_COLLECTION, projectId, 'competitor_analyses');
-            // Create a dedicated doc ID or auto-gen
             const newDoc = doc(analysesRef);
 
             await setDoc(newDoc, {
                 id: newDoc.id,
                 timestamp: Date.now(),
                 competitors: competitors,
-                region: analysis.dna[0]?.financialFlexibility?.classification ? 'Global' : 'Unknown', // Basic metadata
+                status: status,
+                userContext: userContext,
+                savedInputs: competitorData, // Full competitor objects with geography
+                region: analysis?.dna?.[0]?.financialFlexibility?.classification ? 'Global' : 'Unknown',
                 result: analysis,
                 summary: `Analysis of ${competitors.length} competitors (${competitors.join(', ')})`
             });
@@ -321,6 +331,19 @@ export const projectService = {
             await deleteDoc(doc(db, PROJECTS_COLLECTION, projectId, 'competitor_analyses', analysisId));
         } catch (error) {
             console.error("Error deleting shadow analysis:", error);
+            throw error;
+        }
+    },
+
+    // Bulk delete analyses
+    deleteShadowAnalyses: async (projectId: string, analysisIds: string[]): Promise<void> => {
+        try {
+            const deletePromises = analysisIds.map(id =>
+                deleteDoc(doc(db, PROJECTS_COLLECTION, projectId, 'competitor_analyses', id))
+            );
+            await Promise.all(deletePromises);
+        } catch (error) {
+            console.error("Error deleting shadow analyses:", error);
             throw error;
         }
     }

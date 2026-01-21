@@ -4,9 +4,10 @@ import { shadowCompetitorOrchestrator, CompetitorInput, AnalysisResult } from '.
 import { exportToCSV, exportToJSON, exportToPDF } from '../../services/shadowCompetitor/exportService';
 import { projectService } from '../../services/projectService';
 import MarkdownRenderer from '../MarkdownRenderer';
+import ConfirmationModal from '../common/ConfirmationModal';
 
 type ModalStep = 'input' | 'processing' | 'results';
-type ResultTab = 'dna' | 'wargaming' | 'moat' | 'citations';
+type ResultTab = 'dna' | 'wargaming' | 'moat' | 'citations' | 'recommendations';
 
 interface Props {
     isOpen: boolean;
@@ -19,7 +20,13 @@ export const ShadowCompetitorModal: React.FC<Props> = ({ isOpen, onClose, domain
     const [step, setStep] = useState<ModalStep>('input');
     const [competitors, setCompetitors] = useState<Array<{ name: string; geography: GeographyDetection }>>([]);
     const [currentInput, setCurrentInput] = useState('');
+    const [userContext, setUserContext] = useState('');
     const [history, setHistory] = useState<any[]>([]);
+    const [selectedHistoryIds, setSelectedHistoryIds] = useState<string[]>([]);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [isAbortModalOpen, setIsAbortModalOpen] = useState(false); // New state for abort modal
+    const [itemIdToDelete, setItemIdToDelete] = useState<string | null>(null);
+    const [isAborting, setIsAborting] = useState(false); // Ref-like state to track active abort
 
     useEffect(() => {
         if (isOpen && projectId && step === 'input') {
@@ -27,14 +34,92 @@ export const ShadowCompetitorModal: React.FC<Props> = ({ isOpen, onClose, domain
         }
     }, [isOpen, projectId, step]);
 
-    const handleLoadAnalysis = (item: any) => {
-        if (confirm('Load this historical analysis? Current unsaved inputs will be lost.')) {
-            setResults(item.result);
-            setCompetitors(item.competitors.map((c: string) => ({
-                name: c,
-                geography: { region: 'US', regulatoryBody: 'SEC', confidence: 'High', confidenceScore: 100, signals: [] } // Mock geo for history
-            })));
-            setStep('results');
+    // History Load Confirmation State
+    const [pendingLoadAnalysis, setPendingLoadAnalysis] = useState<any>(null);
+
+    const checkLoadAnalysis = (item: any) => {
+        setPendingLoadAnalysis(item);
+    };
+
+    const confirmLoadAnalysis = () => {
+        if (pendingLoadAnalysis) {
+            // Always restore inputs first
+            if (pendingLoadAnalysis.savedInputs && pendingLoadAnalysis.savedInputs.length > 0) {
+                setCompetitors(pendingLoadAnalysis.savedInputs);
+            } else if (pendingLoadAnalysis.competitors) {
+                // Fallback for old history without savedInputs
+                setCompetitors(pendingLoadAnalysis.competitors.map((c: string) => ({
+                    name: c,
+                    geography: { region: 'US', regulatoryBody: 'SEC', confidence: 'High', confidenceScore: 100, signals: [] }
+                })));
+            }
+
+            if (pendingLoadAnalysis.userContext) {
+                setUserContext(pendingLoadAnalysis.userContext);
+            }
+
+            // Logic:
+            // If Aborted -> Go to Input Step (Step 1)
+            // If Completed -> Go to Results Step (Step 3) 
+            // BUT if user specifically asked to "Edit/Restart", we might want Step 1.
+            // For now, simpler: Click History Item -> Loads Results if available (completed), else Inputs.
+            // To allow "Edit", we can add a button in Results view "Edit Inputs".
+
+            if (pendingLoadAnalysis.status === 'aborted' || !pendingLoadAnalysis.result) {
+                setStep('input');
+                // Maybe show a toast/alert "Inputs loaded from aborted session"?
+            } else {
+                setResults(pendingLoadAnalysis.result);
+                setStep('results');
+            }
+
+            setPendingLoadAnalysis(null);
+        }
+    };
+
+    const handleDeleteSingle = (id: string, e: React.MouseEvent) => {
+        e.stopPropagation(); // Prevent opening the item
+        setItemIdToDelete(id);
+        setIsDeleteModalOpen(true);
+    };
+
+    const handleBulkDelete = () => {
+        if (!selectedHistoryIds.length || !projectId) return;
+        setItemIdToDelete(null); // Indicates bulk mode
+        setIsDeleteModalOpen(true);
+    };
+
+    const confirmDelete = async () => {
+        if (!projectId) return;
+
+        if (itemIdToDelete) {
+            // Single Delete
+            await projectService.deleteShadowAnalysis(projectId, itemIdToDelete);
+            setHistory(prev => prev.filter(h => h.id !== itemIdToDelete));
+            // If the deleted item was selected, remove it from selection
+            setSelectedHistoryIds(prev => prev.filter(id => id !== itemIdToDelete));
+        } else {
+            // Bulk Delete
+            await projectService.deleteShadowAnalyses(projectId, selectedHistoryIds);
+            setHistory(prev => prev.filter(h => !selectedHistoryIds.includes(h.id)));
+            setSelectedHistoryIds([]);
+        }
+        setIsDeleteModalOpen(false);
+        setItemIdToDelete(null);
+    };
+
+    const toggleSelection = (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setSelectedHistoryIds(prev =>
+            prev.includes(id) ? prev.filter(pid => pid !== id) : [...prev, id]
+        );
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedHistoryIds.length === history.length) {
+            setSelectedHistoryIds([]);
+        } else {
+            setSelectedHistoryIds(history.map(h => h.id));
         }
     };
 
@@ -85,7 +170,7 @@ export const ShadowCompetitorModal: React.FC<Props> = ({ isOpen, onClose, domain
         try {
             const result = await shadowCompetitorOrchestrator.runFullAnalysis(
                 competitorInputs,
-                domainInput,
+                userContext.trim() || domainInput, // Fallback to domainInput if no explicit context
                 (phase, competitor, status, prog) => {
                     setCurrentPhase(phase);
                     setCurrentCompetitor(competitor);
@@ -98,27 +183,61 @@ export const ShadowCompetitorModal: React.FC<Props> = ({ isOpen, onClose, domain
             setResults(result);
             setStep('results');
 
-            // Auto-Save
-            if (projectId) {
-                projectService.saveShadowAnalysis(projectId, result, competitors.map(c => c.name))
-                    .then(() => projectService.getShadowAnalysisHistory(projectId).then(setHistory))
+            // Auto-Save Completed
+            if (projectId && !isAborting) {
+                projectService.saveShadowAnalysis(
+                    projectId,
+                    result,
+                    competitors.map(c => c.name),
+                    'completed',
+                    userContext,
+                    competitors
+                ).then(() => projectService.getShadowAnalysisHistory(projectId).then(setHistory))
                     .catch(e => console.error("Failed to auto-save:", e));
             }
-        } catch (error) {
-            console.error('Analysis failed:', error);
-            alert('Analysis failed. Please try again.');
-            setStep('input');
+        } catch (error: any) {
+            // If we are already aborting, the UI has handled it.
+            // Just swallow the error or log it.
+            if (error.message === 'Aborted by user' || isAborting) {
+                console.log('Analysis background process terminated.');
+            } else {
+                console.error('Analysis failed:', error);
+                alert('Analysis failed. Please try again.');
+                setStep('input');
+            }
+        } finally {
+            setIsAborting(false);
         }
     };
 
-    const handlePauseResume = () => {
-        if (isPaused) {
-            shadowCompetitorOrchestrator.resume();
-            setIsPaused(false);
-        } else {
-            shadowCompetitorOrchestrator.pause();
-            setIsPaused(true);
+    const handleAbortClick = () => {
+        setIsAbortModalOpen(true);
+    };
+
+    const confirmAbort = async () => {
+        setIsAbortModalOpen(false);
+        setIsAborting(true); // Flag to ignore subsequent promise rejections/saves
+
+        // 1. Signal backend to stop
+        shadowCompetitorOrchestrator.abort();
+
+        // 2. Immediately save aborted state
+        if (projectId) {
+            await projectService.saveShadowAnalysis(
+                projectId,
+                null,
+                competitors.map(c => c.name),
+                'aborted',
+                userContext,
+                competitors
+            );
+            // Refresh history
+            projectService.getShadowAnalysisHistory(projectId).then(setHistory);
         }
+
+        // 3. Reset UI immediately
+        setStep('input');
+        // Inputs (competitors/context) are already in state, so we stay on Step 1 with them filled.
     };
 
     if (!isOpen) return null;
@@ -126,7 +245,7 @@ export const ShadowCompetitorModal: React.FC<Props> = ({ isOpen, onClose, domain
     const regulatoryBodies = [...new Set(competitors.map(c => c.geography.regulatoryBody))].join(', ');
 
     return (
-        <div className="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-lg flex items-center justify-center p-4 animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
             <div className="relative w-full max-w-5xl max-h-[90vh] bg-slate-900 rounded-xl border border-slate-700 shadow-2xl flex flex-col overflow-hidden">
 
                 {/* Header */}
@@ -172,24 +291,72 @@ export const ShadowCompetitorModal: React.FC<Props> = ({ isOpen, onClose, domain
                                         <p className="text-[10px] text-slate-500">No previous analyses</p>
                                     </div>
                                 ) : (
-                                    <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
-                                        {history.map((item) => (
-                                            <button
-                                                key={item.id}
-                                                onClick={() => handleLoadAnalysis(item)}
-                                                className="w-full text-left p-3 rounded-lg border border-slate-800 bg-slate-900/50 hover:bg-slate-800 hover:border-slate-600 transition-all group relative"
-                                            >
-                                                <div className="flex justify-between items-start mb-1">
-                                                    <span className="text-[10px] text-slate-500 font-mono">
-                                                        {new Date(item.timestamp).toLocaleDateString()}
-                                                    </span>
-                                                    <i className="fas fa-chevron-right text-[10px] text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between mb-2 px-1">
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={history.length > 0 && selectedHistoryIds.length === history.length}
+                                                    onChange={toggleSelectAll}
+                                                    className="rounded border-slate-700 bg-slate-800 text-blue-500 focus:ring-offset-slate-900"
+                                                />
+                                                <span className="text-xs text-slate-500 font-medium">Select All</span>
+                                            </div>
+                                            {selectedHistoryIds.length > 0 && (
+                                                <button
+                                                    onClick={handleBulkDelete}
+                                                    className="text-xs text-red-400 hover:text-red-300 font-medium transition-colors"
+                                                >
+                                                    Delete ({selectedHistoryIds.length})
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div className="space-y-2 max-h-[calc(100vh-300px)] overflow-y-auto custom-scrollbar pr-1">
+                                            {history.map((item) => (
+                                                <div
+                                                    key={item.id}
+                                                    onClick={() => checkLoadAnalysis(item)}
+                                                    className="group p-3 rounded-lg border border-slate-700/50 bg-slate-800/30 hover:bg-slate-800/80 hover:border-slate-600 transition-all cursor-pointer flex items-center justify-between"
+                                                >
+                                                    <div className="flex items-center gap-3 overflow-hidden">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedHistoryIds.includes(item.id)}
+                                                            onClick={(e) => toggleSelection(item.id, e)}
+                                                            onChange={() => { }} // Handled by onClick to stop propagation
+                                                            className="rounded border-slate-700 bg-slate-900/50 text-blue-500 focus:ring-offset-slate-900 shrink-0"
+                                                        />
+                                                        <div className="min-w-0">
+                                                            <div className="flex items-center gap-2 mb-1">
+                                                                <span className="text-xs font-medium text-white truncate">
+                                                                    {item.competitors.length > 1 ? `${item.competitors.length} Competitors` : item.competitors[0]}
+                                                                </span>
+                                                                {item.status === 'aborted' ? (
+                                                                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-800 text-red-400/80 border border-red-500/20">
+                                                                        Aborted
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-700 text-slate-300">
+                                                                        {new Date(item.timestamp).toLocaleDateString()}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <p className="text-[10px] text-slate-500 truncate">
+                                                                {item.competitors.join(', ')}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    <button
+                                                        onClick={(e) => handleDeleteSingle(item.id, e)}
+                                                        className="w-6 h-6 rounded flex items-center justify-center text-slate-600 hover:text-red-400 hover:bg-red-900/20 opacity-0 group-hover:opacity-100 transition-all"
+                                                        title="Delete Analysis"
+                                                    >
+                                                        <i className="fas fa-trash-alt text-xs"></i>
+                                                    </button>
                                                 </div>
-                                                <div className="text-xs font-semibold text-slate-300 line-clamp-2 leading-tight group-hover:text-blue-400 transition-colors">
-                                                    {item.competitors.join(', ')}
-                                                </div>
-                                            </button>
-                                        ))}
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -235,6 +402,28 @@ export const ShadowCompetitorModal: React.FC<Props> = ({ isOpen, onClose, domain
                                     <p className="text-[10px] text-slate-500 mt-2">
                                         <i className="fas fa-globe-americas mr-1 text-blue-400"></i>
                                         Geography auto-detected • 3-5 companies recommended
+                                    </p>
+                                </div>
+
+                                {/* Strategic Context Input (NEW) */}
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                                        Strategic Context (Optional)
+                                    </label>
+                                    <div className="relative">
+                                        <textarea
+                                            value={userContext}
+                                            onChange={(e) => setUserContext(e.target.value)}
+                                            placeholder="Describe your roadmap, vision, or specific feature you want to test against..."
+                                            className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500 outline-none text-xs min-h-[80px] resize-none"
+                                        />
+                                        <div className="absolute bottom-2 right-2 text-[10px] text-slate-600">
+                                            {userContext ? 'Overrides default context' : 'Default: Domain Input'}
+                                        </div>
+                                    </div>
+                                    <p className="text-[10px] text-slate-500 mt-2">
+                                        <i className="fas fa-info-circle mr-1 text-blue-400"></i>
+                                        Provide specific details to get more targeted wargaming scenarios.
                                     </p>
                                 </div>
 
@@ -319,13 +508,13 @@ export const ShadowCompetitorModal: React.FC<Props> = ({ isOpen, onClose, domain
 
                     {/* PROCESSING STEP */}
                     {step === 'processing' && (
-                        <div className="space-y-6">
+                        <div className="space-y-4">
                             {/* Overall Status */}
-                            <div className="text-center py-8">
-                                <div className="w-16 h-16 mx-auto mb-4 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                                <h3 className="text-lg font-semibold text-white mb-2">Processing Analysis</h3>
-                                <p className="text-sm text-slate-400">{statusText}</p>
-                                <div className="flex items-center justify-center gap-2 text-[10px] text-slate-500 mt-3">
+                            <div className="text-center py-4">
+                                <div className="w-12 h-12 mx-auto mb-3 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                                <h3 className="text-lg font-semibold text-white mb-1">Processing Analysis</h3>
+                                <p className="text-xs text-slate-400">{statusText}</p>
+                                <div className="flex items-center justify-center gap-2 text-[10px] text-slate-500 mt-2">
                                     <i className="fas fa-database text-blue-400"></i>
                                     <span>Sources: {regulatoryBodies}</span>
                                 </div>
@@ -338,9 +527,9 @@ export const ShadowCompetitorModal: React.FC<Props> = ({ isOpen, onClose, domain
                                     Progress
                                 </h4>
 
-                                <div className="space-y-3">
+                                <div className="space-y-2">
                                     {[1, 2, 3].map(phase => (
-                                        <div key={phase} className={`p-3 rounded-lg border text-sm ${currentPhase === phase ? 'bg-blue-900/10 border-blue-600' : currentPhase > phase ? 'bg-emerald-900/10 border-emerald-700/30' : 'bg-slate-900/20 border-slate-700/30'}`}>
+                                        <div key={phase} className={`p-2.5 rounded-lg border text-sm ${currentPhase === phase ? 'bg-blue-900/10 border-blue-600' : currentPhase > phase ? 'bg-emerald-900/10 border-emerald-700/30' : 'bg-slate-900/20 border-slate-700/30'}`}>
                                             <div className="flex items-center gap-2 mb-1.5">
                                                 {currentPhase > phase && <i className="fas fa-check-circle text-emerald-400 text-sm"></i>}
                                                 {currentPhase === phase && <i className="fas fa-spinner fa-spin text-blue-400 text-sm"></i>}
@@ -363,11 +552,11 @@ export const ShadowCompetitorModal: React.FC<Props> = ({ isOpen, onClose, domain
 
                                 <div className="mt-4 text-center">
                                     <button
-                                        onClick={handlePauseResume}
-                                        className="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 text-white rounded-lg text-sm font-semibold flex items-center gap-2 mx-auto transition-colors"
+                                        onClick={handleAbortClick}
+                                        className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm font-bold flex items-center gap-2 mx-auto border border-red-500/30 hover:border-red-500/50 transition-all shadow-lg shadow-red-900/10"
                                     >
-                                        <i className={`fas fa-${isPaused ? 'play' : 'pause'} text-xs`}></i>
-                                        {isPaused ? 'Resume' : 'Pause'}
+                                        <i className="fas fa-stop-circle text-red-500 text-xs animate-pulse"></i>
+                                        Abort Analysis
                                     </button>
                                 </div>
                             </div>
@@ -411,7 +600,8 @@ export const ShadowCompetitorModal: React.FC<Props> = ({ isOpen, onClose, domain
                                     { id: 'dna' as ResultTab, label: 'Overview', icon: 'fa-chart-line' },
                                     { id: 'wargaming' as ResultTab, label: 'Timeline', icon: 'fa-calendar-alt' },
                                     { id: 'moat' as ResultTab, label: 'Validation', icon: 'fa-shield-alt' },
-                                    { id: 'citations' as ResultTab, label: 'Sources', icon: 'fa-link' }
+                                    { id: 'citations' as ResultTab, label: 'Sources', icon: 'fa-link' },
+                                    { id: 'recommendations' as ResultTab, label: 'Recs', icon: 'fa-lightbulb' }
                                 ].map(tab => (
                                     <button
                                         key={tab.id}
@@ -567,9 +757,23 @@ export const ShadowCompetitorModal: React.FC<Props> = ({ isOpen, onClose, domain
                                                     </span>
                                                 </div>
 
-                                                <div className="bg-slate-900/30 p-3 rounded border border-slate-700/30 mb-4">
-                                                    <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">Likely Strategic Move</div>
-                                                    <p className="text-xs text-slate-300 leading-relaxed font-medium">{game.likelyMove}</p>
+                                                <div className="bg-slate-900/30 p-3 rounded border border-slate-700/30 mb-4 space-y-3">
+                                                    <div>
+                                                        <div className="text-[10px] uppercase tracking-wider text-green-500/80 font-bold mb-1">
+                                                            <i className="fas fa-chess-pawn mr-1"></i> Your Move
+                                                        </div>
+                                                        <p className="text-xs text-slate-300 leading-relaxed font-medium pl-2 border-l-2 border-green-500/20">
+                                                            {game.userMove ?? 'General Market Entry'}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-[10px] uppercase tracking-wider text-red-500/80 font-bold mb-1">
+                                                            <i className="fas fa-chess-knight mr-1"></i> Competitor Counter
+                                                        </div>
+                                                        <p className="text-xs text-slate-300 leading-relaxed font-medium pl-2 border-l-2 border-red-500/20">
+                                                            {game.competitorCounterMove ?? game.likelyMove}
+                                                        </p>
+                                                    </div>
                                                 </div>
 
                                                 <div className="grid grid-cols-2 gap-4">
@@ -681,6 +885,28 @@ export const ShadowCompetitorModal: React.FC<Props> = ({ isOpen, onClose, domain
                                         </div>
                                     </div>
                                 )}
+
+                                {activeTab === 'recommendations' && (
+                                    <div className="space-y-4 pr-2 custom-scrollbar">
+                                        <div className="p-5 bg-slate-800/40 rounded-lg border border-slate-700/50">
+                                            <h4 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                                                <i className="fas fa-lightbulb text-yellow-400"></i> AI Strategic Recommendations
+                                            </h4>
+                                            <ul className="space-y-3">
+                                                {results.recommendations?.length ? results.recommendations.map((rec, idx) => (
+                                                    <li key={idx} className="flex items-start gap-3 bg-slate-900/60 p-4 rounded-lg border border-slate-700/50 shadow-sm">
+                                                        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-500/10 text-blue-400 text-[11px] font-bold shrink-0 mt-0.5 border border-blue-500/20">
+                                                            {idx + 1}
+                                                        </span>
+                                                        <p className="text-xs text-slate-300 leading-relaxed font-medium">{rec}</p>
+                                                    </li>
+                                                )) : (
+                                                    <p className="text-xs text-slate-400 italic">No recommendations generated.</p>
+                                                )}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
@@ -722,14 +948,22 @@ export const ShadowCompetitorModal: React.FC<Props> = ({ isOpen, onClose, domain
 
                             <div className="flex items-center gap-3">
                                 <button
+                                    onClick={() => setStep('input')}
+                                    className="px-4 py-2 text-slate-400 hover:text-white text-sm font-semibold transition-colors"
+                                >
+                                    <i className="fas fa-edit mr-1 text-xs"></i>
+                                    Edit Inputs
+                                </button>
+                                <button
                                     onClick={() => {
                                         setStep('input');
                                         setResults(null);
                                         setCompetitors([]);
+                                        setUserContext('');
                                     }}
                                     className="px-4 py-2 text-slate-400 hover:text-white text-sm font-semibold transition-colors"
                                 >
-                                    <i className="fas fa-arrow-left mr-1 text-xs"></i>
+                                    <i className="fas fa-plus mr-1 text-xs"></i>
                                     New Analysis
                                 </button>
                                 <button
@@ -743,6 +977,40 @@ export const ShadowCompetitorModal: React.FC<Props> = ({ isOpen, onClose, domain
                     )}
                 </div>
             </div>
-        </div >
+
+            {/* CONFIRMATION MODAL FOR HISTORY LOAD */}
+            <ConfirmationModal
+                isOpen={!!pendingLoadAnalysis}
+                onClose={() => setPendingLoadAnalysis(null)}
+                onConfirm={confirmLoadAnalysis}
+                title="Load Historical Analysis"
+                message={`Are you sure you want to load the analysis for "${pendingLoadAnalysis?.competitors?.join(', ')}"? Current unsaved inputs will be discarded.`}
+                confirmLabel="Load Analysis"
+            />
+
+            {/* CONFIRMATION MODAL FOR DELETE */}
+            <ConfirmationModal
+                isOpen={isDeleteModalOpen}
+                onClose={() => setIsDeleteModalOpen(false)}
+                onConfirm={confirmDelete}
+                title={itemIdToDelete ? "Delete Analysis" : "Delete Selected Analyses"}
+                message={itemIdToDelete
+                    ? "Are you sure you want to permanently delete this analysis? This action cannot be undone."
+                    : `Are you sure you want to delete ${selectedHistoryIds.length} analyses? This action cannot be undone.`
+                }
+                confirmLabel="Delete"
+                isDestructive={true}
+            />
+            {/* CONFIRMATION MODAL FOR ABORT */}
+            <ConfirmationModal
+                isOpen={isAbortModalOpen}
+                onClose={() => setIsAbortModalOpen(false)}
+                onConfirm={confirmAbort}
+                title="Abort Analysis"
+                message="Are you sure you want to abort the current simulation? Your inputs will be saved to history so you can resume later."
+                confirmLabel="Abort Analysis"
+                isDestructive={true}
+            />
+        </div>
     );
 };

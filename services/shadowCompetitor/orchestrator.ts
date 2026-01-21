@@ -34,6 +34,8 @@ export interface CompetitorDNA {
 
 export interface WarGameResponse {
     competitor: string;
+    userMove: string;
+    competitorCounterMove: string;
     likelyMove: string;
     probability: 'High' | 'Medium' | 'Low';
     impactOnROI: string;
@@ -65,6 +67,7 @@ export interface AnalysisResult {
     warGaming: WarGameResponse[];
     moat: MoatValidation;
     citations: Citation[];
+    recommendations: string[];
     fullReport: string;
 }
 
@@ -86,7 +89,7 @@ class ShadowCompetitorOrchestrator {
 
         // PHASE 1: DNA Extraction
         for (let i = 0; i < competitors.length; i++) {
-            if (this.shouldStop) break;
+            if (this.shouldStop) throw new Error('Aborted by user');
             while (this.isPaused) {
                 await new Promise(resolve => setTimeout(resolve, 500));
             }
@@ -95,7 +98,17 @@ class ShadowCompetitorOrchestrator {
             onProgress?.(1, comp.name, `Extracting ${comp.regulatoryBody} filings...`, (i / competitors.length) * 33);
 
             const { text: filings, sources: realSources } = await this.extractFilings(comp);
+
+            // Granular Abort Check
+            if (this.shouldStop) throw new Error('Aborted by user');
+
+            // Granular Pause Check
+            while (this.isPaused) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+
             const dna = await this.analyzeDNA(comp, filings);
+            if (this.shouldStop) throw new Error('Aborted by user');
             dnaProfiles.push(dna);
 
             // Store REAL verified sources from the search service
@@ -126,7 +139,7 @@ class ShadowCompetitorOrchestrator {
 
         // PHASE 2: War-Gaming Simulation
         for (let i = 0; i < competitors.length; i++) {
-            if (this.shouldStop) break;
+            if (this.shouldStop) throw new Error('Aborted by user');
             while (this.isPaused) {
                 await new Promise(resolve => setTimeout(resolve, 500));
             }
@@ -135,15 +148,17 @@ class ShadowCompetitorOrchestrator {
             onProgress?.(2, comp.name, 'Simulating competitive response...', 33 + (i / competitors.length) * 33);
 
             const response = await this.simulateResponse(dnaProfiles[i], ourRoadmap);
+            if (this.shouldStop) throw new Error('Aborted by user');
             warGamingResults.push(response);
         }
 
         // PHASE 3: Moat Validation
         onProgress?.(3, 'All Competitors', 'Generating moat validation...', 75);
         const moat = await this.validateMoats(warGamingResults, ourRoadmap);
+        const recommendations = await this.generateRecommendations(warGamingResults, moat, ourRoadmap);
 
         onProgress?.(3, 'All Competitors', 'Formatting final report...', 90);
-        const fullReport = this.formatReport(dnaProfiles, warGamingResults, moat);
+        const fullReport = this.formatReport(dnaProfiles, warGamingResults, moat, recommendations);
 
         onProgress?.(3, 'All Competitors', 'Complete!', 100);
 
@@ -152,6 +167,7 @@ class ShadowCompetitorOrchestrator {
             warGaming: warGamingResults,
             moat,
             citations,
+            recommendations,
             fullReport
         };
     }
@@ -162,6 +178,11 @@ class ShadowCompetitorOrchestrator {
 
     resume() {
         this.isPaused = false;
+    }
+
+    abort() {
+        this.shouldStop = true;
+        this.isPaused = false; // Unpause to allow exit loops
     }
 
     stop() {
@@ -329,7 +350,9 @@ Based on their DNA:
 
 Output STRICT JSON matching this schema:
 {
-  "likelyMove": "Description of their strategic counter-move",
+  "userMove": "Brief description of the user's strategic move (deduced from roadmap)",
+  "competitorCounterMove": "How ${dna.name} will specifically counter this move",
+  "likelyMove": "Short summary of the counter-move title",
   "probability": "High" | "Medium" | "Low",
   "impactOnROI": "Description of impact",
   "timeline": { "T30": "Immediate action", "T90": "Quarterly action", "T180": "6-month action", "T365": "1-year outlook" },
@@ -360,6 +383,8 @@ Output STRICT JSON matching this schema:
 
         return {
             competitor: dna.name,
+            userMove: 'Unknown',
+            competitorCounterMove: 'Unknown',
             likelyMove: 'Unknown',
             probability: 'Medium',
             impactOnROI: 'Unknown',
@@ -410,7 +435,37 @@ Output STRICT JSON matching this schema:
         };
     }
 
-    private formatReport(dna: CompetitorDNA[], warGaming: WarGameResponse[], moat: MoatValidation): string {
+    private async generateRecommendations(warGaming: WarGameResponse[], moat: MoatValidation, roadmap: string): Promise<string[]> {
+        const prompt = `Based on the competitive analysis, provide 3-5 actionable strategic recommendations for the user.
+
+Roadmap: ${roadmap}
+Competitor Threats: ${JSON.stringify(warGaming.map(w => ({ competitor: w.competitor, counterMove: w.competitorCounterMove, probability: w.probability })))}
+Moat Validation: ${JSON.stringify(moat)}
+
+Output STRICT JSON string array: ["Rec 1", "Rec 2", "Rec 3"]`;
+
+        try {
+            const result = await callGeminiAgent(
+                GeminiCapability.ANALYSIS_MAIN,
+                prompt,
+                '',
+                [],
+                true,
+                false
+            );
+
+            const jsonMatch = result.text.match(/\[[\s\S]*\]/);
+            if (jsonMatch) {
+                return JSON.parse(jsonMatch[0]);
+            }
+        } catch (error) {
+            console.error('Recommendation generation failed:', error);
+        }
+
+        return ['Focus on unique value gaps.', 'Accelerate time-to-market for defensible features.'];
+    }
+
+    private formatReport(dna: CompetitorDNA[], warGaming: WarGameResponse[], moat: MoatValidation, recommendations: string[]): string {
         let report = `### Competitive Intelligence Report\n\n`;
 
         report += `#### 🧬 Phase 1: Competitor DNA Extraction\n\n`;
@@ -433,7 +488,8 @@ Output STRICT JSON matching this schema:
         report += `#### ⚔️ Phase 2: War-Game Simulation\n\n`;
         warGaming.forEach(w => {
             report += `##### ${w.competitor}\n`;
-            report += `**Likely Move**: ${w.likelyMove}\n`;
+            report += `**Your Move**: ${w.userMove}\n`;
+            report += `**Counter-Move**: ${w.competitorCounterMove}\n`;
             report += `**Timeline**: T+30: ${w.timeline?.T30 ?? 'N/A'}, T+90: ${w.timeline?.T90 ?? 'N/A'}\n\n`;
         });
 
@@ -441,6 +497,11 @@ Output STRICT JSON matching this schema:
         report += `**Green Flags**: ${moat.greenFlags?.length ?? 0} defensible features\n`;
         report += `**Red Flags**: ${moat.redFlags?.length ?? 0} copyable features\n`;
         report += `**Strategic Pivot**: ${moat.strategicPivot ?? 'Analysis incomplete'}\n\n`;
+
+        report += `#### 💡 Recommendations\n\n`;
+        recommendations.forEach(r => {
+            report += `- ${r}\n`;
+        });
 
         return report;
     }
