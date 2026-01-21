@@ -135,6 +135,7 @@ const App: React.FC = () => {
   const [showProjectList, setShowProjectList] = useState(false);
   const [isInstructionModalOpen, setIsInstructionModalOpen] = useState(false);
   const [customInstructions, setCustomInstructions] = useState<Record<string, string>>({});
+  const [hasShadowHistory, setHasShadowHistory] = useState(false);
 
   // Initialize Project System
   useEffect(() => {
@@ -157,6 +158,7 @@ const App: React.FC = () => {
     };
     initProject();
   }, [user]);
+
 
   const loadProject = (project: Project) => {
     setActiveProjectId(project.id);
@@ -361,6 +363,17 @@ const App: React.FC = () => {
 
   // Shadow Competitor Modal State
   const [showShadowCompetitorModal, setShowShadowCompetitorModal] = useState(false);
+
+  // Check for Shadow Competitor History
+  useEffect(() => {
+    if (activeProjectId) {
+      projectService.getShadowAnalysisHistory(activeProjectId)
+        .then(history => setHasShadowHistory(history.length > 0))
+        .catch(err => console.error("Failed to check shadow history", err));
+    } else {
+      setHasShadowHistory(false);
+    }
+  }, [activeProjectId, showShadowCompetitorModal]); // Re-check when modal closes/opens potentially updating history
 
   // Output Editing & Refinement
   const [isEditingOutput, setIsEditingOutput] = useState(false);
@@ -1955,11 +1968,11 @@ ${confluenceCapture}
       <div className={`flex-1 overflow-y-auto ${isCollapsed ? 'space-y-2' : 'space-y-4'}`}>
         <button
           onClick={() => setShowProjectConfig(true)}
-          className={`w-full text-left rounded-xl transition-all duration-300 group relative flex items-center gap-3 overflow-hidden border border-dashed border-indigo-500/30 hover:bg-indigo-600/10 hover:border-indigo-500 text-indigo-400 ${isCollapsed ? 'p-2 justify-center' : 'px-3 py-2.5'}`}
+          className={`w-full text-left rounded-xl transition-all duration-300 group relative flex items-center gap-3 overflow-hidden border border-dashed border-slate-700 hover:border-slate-500 hover:bg-slate-800/40 text-slate-400 hover:text-slate-200 ${isCollapsed ? 'p-2 justify-center' : 'px-3 py-2.5'}`}
           title={isCollapsed ? "Global Context" : undefined}
         >
-          <div className="w-8 h-8 rounded-lg bg-indigo-600/10 flex items-center justify-center shrink-0">
-            <i className="fas fa-briefcase text-xs"></i>
+          <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center shrink-0">
+            <i className="fas fa-briefcase text-xs text-slate-500 group-hover:text-slate-300 transition-colors"></i>
           </div>
           {!isCollapsed && (
             <div className="flex-1 min-w-0 animate-in fade-in duration-300">
@@ -1976,11 +1989,18 @@ ${confluenceCapture}
         {canUseShadowCompetitor && (
           <button
             onClick={() => setShowShadowCompetitorModal(true)}
-            className={`w-full text-left rounded-xl transition-all duration-300 group relative flex items-center gap-3 overflow-hidden bg-gradient-to-r from-indigo-700/10 to-indigo-900/10 backdrop-blur-md border border-indigo-600/30 hover:bg-indigo-600/20 hover:border-indigo-500 text-indigo-300 hover:text-indigo-200 ${isCollapsed ? 'p-2 justify-center' : 'px-3 py-2.5'}`}
+            className={`w-full text-left rounded-xl transition-all duration-300 group relative flex items-center gap-3 overflow-hidden 
+              ${hasShadowHistory
+                ? 'bg-gradient-to-r from-cyan-900/10 to-blue-900/10 backdrop-blur-md border border-cyan-500/30 hover:bg-cyan-900/20 hover:border-cyan-400 text-cyan-400 hover:text-cyan-200'
+                : 'border border-dashed border-slate-700/50 hover:border-cyan-500/30 hover:bg-cyan-900/5 text-slate-500 hover:text-cyan-400'}
+              ${isCollapsed ? 'p-2 justify-center' : 'px-3 py-2.5'}`}
             title={isCollapsed ? "Shadow Competitor Pro" : "Run strategic war-gaming simulations"}
           >
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-700/20 to-indigo-900/20 flex items-center justify-center shrink-0 border border-indigo-600/50">
-              <i className="fas fa-microchip text-xs"></i>
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border transition-all duration-300
+              ${hasShadowHistory
+                ? 'bg-gradient-to-br from-cyan-500/10 to-blue-600/10 border-cyan-500/30'
+                : 'bg-slate-800/50 border-transparent group-hover:bg-cyan-900/10 group-hover:border-cyan-500/20'}`}>
+              <i className={`fas fa-microchip text-xs transition-colors duration-300 ${hasShadowHistory ? 'text-cyan-400' : 'text-slate-500 group-hover:text-cyan-400'}`}></i>
             </div>
             {!isCollapsed && (
               <div className="flex-1 min-w-0 animate-in fade-in duration-300">
