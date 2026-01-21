@@ -96,9 +96,23 @@ export const ShadowCompetitorModal: React.FC<Props> = ({ isOpen, onClose, domain
             await projectService.deleteShadowAnalysis(projectId, itemIdToDelete);
             setHistory(prev => prev.filter(h => h.id !== itemIdToDelete));
             setSelectedHistoryIds(prev => prev.filter(id => id !== itemIdToDelete));
+            if (history.length === 1 && history[0].id === itemIdToDelete) {
+                setCompetitors([]);
+                setResults(null);
+                setUserContext('');
+                setProgress(0);
+                setStep('input');
+            }
         } else {
             await projectService.deleteShadowAnalyses(projectId, selectedHistoryIds);
             setHistory(prev => prev.filter(h => !selectedHistoryIds.includes(h.id)));
+            if (history.length === selectedHistoryIds.length) {
+                setCompetitors([]);
+                setResults(null);
+                setUserContext('');
+                setProgress(0);
+                setStep('input');
+            }
             setSelectedHistoryIds([]);
         }
         setIsDeleteModalOpen(false);
@@ -165,6 +179,7 @@ export const ShadowCompetitorModal: React.FC<Props> = ({ isOpen, onClose, domain
             );
 
             setResults(result);
+            setActiveTab('dna');
             setStep('results');
 
             if (projectId && !isAborting) {
