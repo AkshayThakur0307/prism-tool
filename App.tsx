@@ -25,6 +25,7 @@ import ChatBot from './components/ChatBot';
 import ProductManual from './components/ProductManual';
 import ProjectListModal from './components/ProjectListModal';
 import FigmaConfigModal from './components/FigmaConfigModal';
+import { ProjectConfigModal } from './components/ProjectConfigModal';
 import NotionConfigModal from './components/NotionConfigModal'; // New
 import { ConfluenceConfigModal } from './components/ConfluenceConfigModal';
 import { ConfluenceConfig } from './types';
@@ -3717,146 +3718,15 @@ ${confluenceCapture}
         )
       }
 
-      {
-        showProjectConfig && (
-          <div className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-xl flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-slate-800 rounded-[3rem] w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-300">
-              <div className="p-8 sm:p-12 border-b border-slate-800 flex justify-between items-center bg-slate-900/60">
-                <div className="flex-1 pr-6">
-                  <h2 className="text-3xl font-black text-white uppercase tracking-tighter mb-1">Strategic Baseline</h2>
-                  <p className="text-xs text-indigo-400 font-bold uppercase tracking-[0.2em]">Optional Project Context</p>
-                </div>
+      {/* Project Config Modal (Global Context) */}
+      <ProjectConfigModal
+        isOpen={showProjectConfig}
+        onClose={() => setShowProjectConfig(false)}
+        projectMetadata={state.projectMetadata}
+        onMetadataChange={handleMetadataChange}
+        canEdit={!!canEditProject}
+      />
 
-                <div className="flex items-center gap-6 shrink-0">
-
-
-                  <div className="hidden sm:flex items-center gap-4 border-l border-slate-800 pl-8">
-                    <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-indigo-600/40">
-                      <i className="fas fa-layer-group text-white text-2xl"></i>
-                    </div>
-                    <div>
-                      <div className="text-base font-black text-white tracking-tighter uppercase leading-none">DISCOVERY PRO</div>
-                      <div className="text-[10px] text-indigo-400 font-bold tracking-[0.15em] mt-2 uppercase opacity-80">PRSIM.AI Material +</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-8 sm:p-12 space-y-10">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="space-y-3">
-                    <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">Company Name</label>
-                    <input
-                      type="text"
-                      readOnly={!canEditProject}
-                      value={state.projectMetadata.companyName}
-                      onChange={(e) => handleMetadataChange('companyName', e.target.value)}
-                      className={`w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEditProject ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      placeholder="e.g. Material+"
-                    />
-                  </div>
-                  <div className="space-y-3">
-                    <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">Target Vertical</label>
-                    <input
-                      type="text"
-                      readOnly={!canEditProject}
-                      value={state.projectMetadata.targetVertical}
-                      onChange={(e) => handleMetadataChange('targetVertical', e.target.value)}
-                      className={`w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEditProject ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      placeholder="e.g. Fintech, Media, Sports"
-                    />
-                  </div>
-                  <div className="space-y-3">
-                    <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">Geography</label>
-                    <input
-                      type="text"
-                      readOnly={!canEditProject}
-                      value={state.projectMetadata.geography}
-                      onChange={(e) => handleMetadataChange('geography', e.target.value)}
-                      className={`w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEditProject ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      placeholder="e.g. NA, EMEA, Global..."
-                    />
-                  </div>
-                  <div className="space-y-3">
-                    <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">TAM / Market Focus</label>
-                    <input
-                      type="text"
-                      readOnly={!canEditProject}
-                      value={state.projectMetadata.tam}
-                      onChange={(e) => handleMetadataChange('tam', e.target.value)}
-                      className={`w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEditProject ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      placeholder="Market size or growth goal..."
-                    />
-                  </div>
-                  <div className="space-y-3">
-                    <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">Revenue Model</label>
-                    <input
-                      type="text"
-                      readOnly={!canEditProject}
-                      value={state.projectMetadata.revenueModel}
-                      onChange={(e) => handleMetadataChange('revenueModel', e.target.value)}
-                      className={`w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEditProject ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      placeholder="e.g. Subscription, Ad-led..."
-                    />
-                  </div>
-                  <div className="space-y-3">
-                    <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">Web Presence / References</label>
-                    <input
-                      type="text"
-                      readOnly={!canEditProject}
-                      value={state.projectMetadata.websiteUrls}
-                      onChange={(e) => handleMetadataChange('websiteUrls', e.target.value)}
-                      className={`w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all ${!canEditProject ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      placeholder="URLs for business context..."
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">Competitive Benchmark</label>
-                  <textarea
-                    rows={2}
-                    readOnly={!canEditProject}
-                    value={state.projectMetadata.keyCompetitors}
-                    onChange={(e) => handleMetadataChange('keyCompetitors', e.target.value)}
-                    className={`w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all resize-none ${!canEditProject ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    placeholder="Who are we competing with?"
-                  />
-                </div>
-
-                <div className="space-y-3">
-                  <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">Core Mission</label>
-                  <textarea
-                    rows={3}
-                    readOnly={!canEditProject}
-                    value={state.projectMetadata.missionStatement}
-                    onChange={(e) => handleMetadataChange('missionStatement', e.target.value)}
-                    className={`w-full bg-slate-950/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-sm text-white focus:ring-2 focus:ring-indigo-500/40 outline-none transition-all resize-none ${!canEditProject ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    placeholder="Ultimate vision for this project..."
-                  />
-                </div>
-              </div>
-
-              <div className="p-8 sm:p-12 border-t border-slate-800 bg-slate-950/40 flex flex-col sm:flex-row justify-between items-center gap-8">
-
-                <button
-                  onClick={() => setShowProjectConfig(false)}
-                  className="text-[11px] font-bold text-slate-500 uppercase tracking-widest hover:text-indigo-400 transition-colors flex items-center gap-2"
-                >
-                  Skip Optional Details <i className="fas fa-arrow-right"></i>
-                </button>
-
-                <button
-                  onClick={() => setShowProjectConfig(false)}
-                  className="w-full sm:w-auto px-16 py-5 btn-grad rounded-[2rem] text-[12px] font-black uppercase tracking-[0.25em] transition-all hover:px-20 shadow-lg shadow-indigo-900/20"
-                >
-                  Launch Workbench
-                </button>
-              </div>
-            </div>
-          </div>
-        )
-      }
 
       {
         isPresenting && (
@@ -4258,7 +4128,7 @@ ${confluenceCapture}
         domainInput={state.stages[DiscoveryStage.DOMAIN].input}
         projectId={activeProjectId}
       />
-    </div>
+    </div >
   );
 };
 
