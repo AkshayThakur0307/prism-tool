@@ -36,6 +36,7 @@ import { useAuth } from './src/contexts/AuthContext';
 import { useRBAC } from './src/hooks/useRBAC';
 import AdminUserModal from './components/AdminUserModal';
 import { ShareProjectModal } from './components/ShareProjectModal';
+import { VirtualWarRoomModal } from './components/WarRoom/VirtualWarRoomModal';
 import ConfirmationModal from './components/common/ConfirmationModal';
 import Toast, { ToastType } from './components/common/Toast';
 import { EstimationSheet } from './components/EstimationSheet';
@@ -364,6 +365,7 @@ const App: React.FC = () => {
 
   // Shadow Competitor Modal State
   const [showShadowCompetitorModal, setShowShadowCompetitorModal] = useState(false);
+  const [showWarRoomModal, setShowWarRoomModal] = useState(false);
 
   // Check for Shadow Competitor History
   useEffect(() => {
@@ -1986,32 +1988,52 @@ ${confluenceCapture}
 
         <div className={`h-[1px] bg-slate-800/50 mx-2 my-2 ${isCollapsed ? 'mx-4' : ''}`}></div>
 
-        {/* Shadow Competitor CTA - Below Global Context */}
-        {canUseShadowCompetitor && (
+        {/* Special Tools Grid - Compact Mode */}
+        <div className={`${isCollapsed ? 'flex flex-col gap-2' : 'grid grid-cols-2 gap-1.5'} mt-2`}>
+          {/* Shadow Competitor CTA */}
+          {canUseShadowCompetitor && (
+            <button
+              onClick={() => setShowShadowCompetitorModal(true)}
+              className={`w-full text-left rounded-lg transition-all duration-300 group relative flex flex-col items-center gap-1.5 overflow-hidden border border-dashed text-slate-500
+                ${hasShadowHistory
+                  ? 'bg-gradient-to-br from-cyan-900/10 to-blue-900/10 border-cyan-500/30 hover:bg-cyan-900/20 hover:border-cyan-400 text-cyan-400'
+                  : 'border-slate-700/50 hover:border-cyan-500/30 hover:bg-cyan-900/5 hover:text-cyan-400'}
+                ${isCollapsed ? 'p-1.5 justify-center' : 'py-2 px-1'}`}
+              title="Shadow Competitor Pro"
+            >
+              <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 border transition-all duration-300
+                ${hasShadowHistory
+                  ? 'bg-cyan-500/10 border-cyan-500/30'
+                  : 'bg-slate-800/50 border-transparent group-hover:bg-cyan-900/10 group-hover:border-cyan-500/20'}`}>
+                <i className={`fas fa-microchip text-[10px] transition-colors duration-300 ${hasShadowHistory ? 'text-cyan-400' : 'text-slate-500 group-hover:text-cyan-400'}`}></i>
+              </div>
+              {!isCollapsed && (
+                <div className="text-center min-w-0 animate-in fade-in duration-300">
+                  <div className="text-[8px] font-black uppercase tracking-widest opacity-60 leading-none mb-0.5">Intel</div>
+                  <div className="text-[9px] font-bold truncate leading-none">Shadow Comp.</div>
+                </div>
+              )}
+            </button>
+          )}
+
+          {/* Virtual War Room CTA */}
           <button
-            onClick={() => setShowShadowCompetitorModal(true)}
-            className={`w-full text-left rounded-xl transition-all duration-300 group relative flex items-center gap-3 overflow-hidden 
-              ${hasShadowHistory
-                ? 'bg-gradient-to-r from-cyan-900/10 to-blue-900/10 backdrop-blur-md border border-cyan-500/30 hover:bg-cyan-900/20 hover:border-cyan-400 text-cyan-400 hover:text-cyan-200'
-                : 'border border-dashed border-slate-700/50 hover:border-cyan-500/30 hover:bg-cyan-900/5 text-slate-500 hover:text-cyan-400'}
-              ${isCollapsed ? 'p-2 justify-center' : 'px-3 py-2.5'}`}
-            title={isCollapsed ? "Shadow Competitor Pro" : "Run strategic war-gaming simulations"}
+            onClick={() => setShowWarRoomModal(true)}
+            className={`w-full text-left rounded-lg transition-all duration-300 group relative flex flex-col items-center gap-1.5 overflow-hidden border border-dashed border-slate-700/50 hover:border-red-500/30 hover:bg-red-900/5 text-slate-500 hover:text-red-400
+              ${isCollapsed ? 'p-1.5 justify-center' : 'py-2 px-1'}`}
+            title="Virtual War Room"
           >
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border transition-all duration-300
-              ${hasShadowHistory
-                ? 'bg-gradient-to-br from-cyan-500/10 to-blue-600/10 border-cyan-500/30'
-                : 'bg-slate-800/50 border-transparent group-hover:bg-cyan-900/10 group-hover:border-cyan-500/20'}`}>
-              <i className={`fas fa-microchip text-xs transition-colors duration-300 ${hasShadowHistory ? 'text-cyan-400' : 'text-slate-500 group-hover:text-cyan-400'}`}></i>
+            <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 border transition-all duration-300 bg-slate-800/50 border-transparent group-hover:bg-red-900/10 group-hover:border-red-500/20`}>
+              <i className="fas fa-users-viewfinder text-[10px] text-slate-500 group-hover:text-red-400 transition-colors duration-300"></i>
             </div>
             {!isCollapsed && (
-              <div className="flex-1 min-w-0 animate-in fade-in duration-300">
-                <div className="text-[10px] font-black uppercase tracking-widest opacity-60">Competitive Intel</div>
-                <div className="text-[11px] font-bold truncate">Shadow Competitor Pro</div>
+              <div className="text-center min-w-0 animate-in fade-in duration-300">
+                <div className="text-[8px] font-black uppercase tracking-widest opacity-60 leading-none mb-0.5">Validation</div>
+                <div className="text-[9px] font-bold truncate leading-none">War Room</div>
               </div>
             )}
-            {!isCollapsed && <i className="fas fa-arrow-right text-xs opacity-50"></i>}
           </button>
-        )}
+        </div>
 
         <div className={`h-[1px] bg-slate-800/50 mx-2 my-2 ${isCollapsed ? 'mx-4' : ''}`}></div>
 
@@ -4127,6 +4149,19 @@ ${confluenceCapture}
         onClose={() => setShowShadowCompetitorModal(false)}
         domainInput={state.stages[DiscoveryStage.DOMAIN].input}
         projectId={activeProjectId}
+      />
+
+      <VirtualWarRoomModal
+        isOpen={showWarRoomModal}
+        onClose={() => setShowWarRoomModal(false)}
+        currentStage={state.currentStage}
+        projectContext={state.projectMetadata}
+        userName={user?.displayName || 'Strategist'}
+        stageContext={{
+          stageInput: state.stages[state.currentStage]?.input || '',
+          stageOutput: state.stages[state.currentStage]?.output || '',
+          projectMetadata: state.projectMetadata
+        }}
       />
     </div >
   );
