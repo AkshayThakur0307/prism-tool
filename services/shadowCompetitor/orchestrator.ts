@@ -55,6 +55,23 @@ export interface MoatValidation {
     strategicPivot: string;
 }
 
+export interface ComparisonPoint {
+    category: string;
+    userScore: number;
+    competitorScore: number;
+    winner: 'User' | 'Competitor' | 'Tie';
+    rationale: string;
+}
+
+export interface HeadToHeadComparison {
+    competitor: string;
+    strengths: string[];
+    weaknesses: string[];
+    benchmarks: ComparisonPoint[];
+    overallVerdict: string;
+}
+
+
 export interface Citation {
     competitor: string;
     filingType: string;
@@ -66,6 +83,7 @@ export interface AnalysisResult {
     dna: CompetitorDNA[];
     warGaming: WarGameResponse[];
     moat: MoatValidation;
+    comparisons: HeadToHeadComparison[];
     citations: Citation[];
     recommendations: string[];
     fullReport: string;
@@ -85,6 +103,7 @@ class ShadowCompetitorOrchestrator {
 
         const dnaProfiles: CompetitorDNA[] = [];
         const warGamingResults: WarGameResponse[] = [];
+        const comparisonResults: HeadToHeadComparison[] = [];
         const citations: Citation[] = [];
 
         // PHASE 1: DNA Extraction
@@ -95,7 +114,7 @@ class ShadowCompetitorOrchestrator {
             }
 
             const comp = competitors[i];
-            onProgress?.(1, comp.name, `Extracting ${comp.regulatoryBody} filings...`, (i / competitors.length) * 33);
+            onProgress?.(1, comp.name, `Extracting ${comp.regulatoryBody} filings, news & public reports...`, (i / competitors.length) * 33);
 
             const { text: filings, sources: realSources } = await this.extractFilings(comp);
 
@@ -145,31 +164,39 @@ class ShadowCompetitorOrchestrator {
             }
 
             const comp = competitors[i];
-            onProgress?.(2, comp.name, 'Simulating competitive response...', 33 + (i / competitors.length) * 33);
+            onProgress?.(2, comp.name, 'Analyzing market signals & simulating response...', 33 + (i / competitors.length) * 33);
 
             const response = await this.simulateResponse(dnaProfiles[i], ourRoadmap);
             if (this.shouldStop) throw new Error('Aborted by user');
             warGamingResults.push(response);
         }
 
-        // PHASE 3: Moat Validation
-        onProgress?.(3, 'All Competitors', 'Generating moat validation...', 75);
+        onProgress?.(3, 'All Competitors', 'Validating moats against public benchmarks...', 75);
         const moat = await this.validateMoats(warGamingResults, ourRoadmap);
+
+        // PHASE 4: Head-to-Head Comparison
+        for (let i = 0; i < dnaProfiles.length; i++) {
+            if (this.shouldStop) throw new Error('Aborted by user');
+            const comp = dnaProfiles[i];
+            onProgress?.(4, comp.name, 'Benchmarking against roadmap & industry data...', 80 + (i / dnaProfiles.length) * 15);
+            const comparison = await this.compareHeadToHead(comp, ourRoadmap);
+            comparisonResults.push(comparison);
+        }
+
         const recommendations = await this.generateRecommendations(warGamingResults, moat, ourRoadmap);
 
-        onProgress?.(3, 'All Competitors', 'Formatting final report...', 90);
-        const fullReport = this.formatReport(dnaProfiles, warGamingResults, moat, recommendations);
-
-        onProgress?.(3, 'All Competitors', 'Complete!', 100);
+        onProgress?.(4, 'All Competitors', 'Finalizing intelligence report...', 98);
 
         return {
             dna: dnaProfiles,
             warGaming: warGamingResults,
             moat,
+            comparisons: comparisonResults,
             citations,
             recommendations,
-            fullReport
+            fullReport: `Analysis complete. Benchmarked ${competitors.length} competitors against your roadmap.`
         };
+
     }
 
     pause() {
@@ -464,6 +491,78 @@ Output STRICT JSON string array: ["Rec 1", "Rec 2", "Rec 3"]`;
 
         return ['Focus on unique value gaps.', 'Accelerate time-to-market for defensible features.'];
     }
+
+    private async compareHeadToHead(dna: CompetitorDNA, roadmap: string): Promise<HeadToHeadComparison> {
+        const prompt = `Perform a head-to-head benchmarking between the User (Project Roadmap) and ${dna.name} (Competitor).
+
+User Roadmap: ${roadmap}
+Competitor Context: ${JSON.stringify(dna)}
+
+Output STRICT JSON matching this schema:
+{
+  "competitor": "${dna.name}",
+  "strengths": ["Competitor strength 1", "Competitor strength 2"],
+  "weaknesses": ["Competitor weakness 1", "Competitor weakness 2"],
+  "benchmarks": [
+    {
+      "category": "Financial Speed",
+      "userScore": 1-10,
+      "competitorScore": 1-10,
+      "winner": "User" | "Competitor" | "Tie",
+      "rationale": "Short explanation"
+    },
+    {
+      "category": "Product Moat",
+      "userScore": 1-10,
+      "competitorScore": 1-10,
+      "winner": "User" | "Competitor" | "Tie",
+      "rationale": "Short explanation"
+    },
+    {
+      "category": "R&D Velocity",
+      "userScore": 1-10,
+      "competitorScore": 1-10,
+      "winner": "User" | "Competitor" | "Tie",
+      "rationale": "Short explanation"
+    },
+    {
+      "category": "Execution Risk",
+      "userScore": 1-10,
+      "competitorScore": 1-10,
+      "winner": "User" | "Competitor" | "Tie",
+      "rationale": "Short explanation"
+    }
+  ],
+  "overallVerdict": "Summary of who has the upper hand and why"
+}`;
+
+        try {
+            const result = await callGeminiAgent(
+                GeminiCapability.ANALYSIS_MAIN,
+                prompt,
+                '',
+                [],
+                true,
+                false
+            );
+
+            const jsonMatch = result.text.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                return JSON.parse(jsonMatch[0]);
+            }
+        } catch (error) {
+            console.error(`Comparison failed for ${dna.name}:`, error);
+        }
+
+        return {
+            competitor: dna.name,
+            strengths: [],
+            weaknesses: [],
+            benchmarks: [],
+            overallVerdict: 'Benchmarking unavailable for this competitor.'
+        };
+    }
+
 
     private formatReport(dna: CompetitorDNA[], warGaming: WarGameResponse[], moat: MoatValidation, recommendations: string[]): string {
         let report = `### Competitive Intelligence Report\n\n`;

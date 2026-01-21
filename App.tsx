@@ -1977,15 +1977,15 @@ ${confluenceCapture}
           <button
             onClick={() => setShowShadowCompetitorModal(true)}
             className={`w-full text-left rounded-xl transition-all duration-300 group relative flex items-center gap-3 overflow-hidden bg-gradient-to-r from-indigo-700/10 to-indigo-900/10 backdrop-blur-md border border-indigo-600/30 hover:bg-indigo-600/20 hover:border-indigo-500 text-indigo-300 hover:text-indigo-200 ${isCollapsed ? 'p-2 justify-center' : 'px-3 py-2.5'}`}
-            title={isCollapsed ? "Competitive Analysis" : "Run competitive intelligence analysis"}
+            title={isCollapsed ? "Shadow Competitor Pro" : "Run strategic war-gaming simulations"}
           >
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-700/20 to-indigo-900/20 flex items-center justify-center shrink-0 border border-indigo-600/50">
-              <i className="fas fa-project-diagram text-xs"></i>
+              <i className="fas fa-microchip text-xs"></i>
             </div>
             {!isCollapsed && (
               <div className="flex-1 min-w-0 animate-in fade-in duration-300">
-                <div className="text-[10px] font-semibold uppercase tracking-wider opacity-70">Competitive Intel</div>
-                <div className="text-[11px] font-semibold truncate">Strategic Analysis</div>
+                <div className="text-[10px] font-black uppercase tracking-widest opacity-60">Competitive Intel</div>
+                <div className="text-[11px] font-bold truncate">Shadow Competitor Pro</div>
               </div>
             )}
             {!isCollapsed && <i className="fas fa-arrow-right text-xs opacity-50"></i>}
