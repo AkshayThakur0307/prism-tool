@@ -617,12 +617,10 @@ export const ShadowCompetitorModal: React.FC<Props> = ({ isOpen, onClose, domain
 
                                 {step === 'processing' && (
                                     <div className="flex-1 flex flex-col items-center justify-center p-6 bg-slate-900/40 rounded-2xl border border-slate-800/50 shadow-2xl">
-                                        <div className="mb-8 relative">
-                                            <div className="w-24 h-24 rounded-full border-4 border-blue-500/10 border-t-blue-500 animate-spin"></div>
-                                            <div className="absolute inset-x-0 bottom-[-40px] text-center">
-                                                <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] animate-pulse">
-                                                    Simulating Phase {currentPhase}
-                                                </div>
+                                        <div className="mb-8 flex flex-col items-center">
+                                            <div className="w-24 h-24 rounded-full border-4 border-blue-500/10 border-t-blue-500 animate-spin mb-6"></div>
+                                            <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] animate-pulse">
+                                                Simulating Phase {currentPhase}
                                             </div>
                                         </div>
 
