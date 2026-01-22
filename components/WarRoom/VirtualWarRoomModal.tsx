@@ -160,9 +160,17 @@ export const VirtualWarRoomModal: React.FC<VirtualWarRoomModalProps> = ({
         }
     }, [sessionstate.isActive, isThinking]);
 
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            ElevenLabsService.stop();
+        };
+    }, []);
+
     const handleStopSession = () => {
         setSessionState(prev => ({ ...prev, isActive: false }));
         recognitionRef.current?.stop();
+        ElevenLabsService.stop();
     };
 
     const toggleSession = () => {
@@ -176,9 +184,7 @@ export const VirtualWarRoomModal: React.FC<VirtualWarRoomModalProps> = ({
 
     const handleEndSession = async () => {
         // Stop recording first
-        if (sessionstate.isActive) {
-            handleStopSession();
-        }
+        handleStopSession();
 
         setIsSynthesizing(true);
         try {
@@ -286,7 +292,12 @@ export const VirtualWarRoomModal: React.FC<VirtualWarRoomModalProps> = ({
                                 {isSynthesizing ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-flag-checkered"></i>}
                                 {isSynthesizing ? 'Synthesizing...' : 'End & Synthesize'}
                             </button>
-                            <button onClick={onClose} className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
+                            <button
+                                onClick={() => {
+                                    handleStopSession();
+                                    onClose();
+                                }}
+                                className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
                                 <i className="fas fa-times"></i>
                             </button>
                         </div>
@@ -430,6 +441,45 @@ export const VirtualWarRoomModal: React.FC<VirtualWarRoomModalProps> = ({
                                             : 'bg-slate-900 text-slate-300 border-slate-800 rounded-tl-none'}
                                     `}>
                                         {msg.content}
+
+                                        {/* Expert Analysis Block (Co-Pilot Mode) */}
+                                        {msg.expertAnalysis && (
+                                            <div className="mt-3 p-2.5 bg-black/20 rounded-lg text-[10px] space-y-1.5 border-l-2 border-indigo-500/50">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <i className="fas fa-brain text-indigo-400"></i>
+                                                    <span className="font-bold text-indigo-400 uppercase tracking-wider">Expert Analysis</span>
+                                                </div>
+                                                <div className="grid grid-cols-[60px_1fr] gap-1">
+                                                    <span className="text-slate-500 font-bold">Problem:</span>
+                                                    <span className="text-slate-300">{msg.expertAnalysis.problemIdentified}</span>
+                                                </div>
+                                                <div className="grid grid-cols-[60px_1fr] gap-1">
+                                                    <span className="text-slate-500 font-bold">Root:</span>
+                                                    <span className="text-slate-300">{msg.expertAnalysis.rootCause}</span>
+                                                </div>
+                                                <div className="grid grid-cols-[60px_1fr] gap-1">
+                                                    <span className="text-slate-500 font-bold">Fix:</span>
+                                                    <span className="text-indigo-300 font-medium">{msg.expertAnalysis.proposedSolution}</span>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Artifact Renderer */}
+                                        {msg.artifactType && msg.artifactType !== 'NONE' && (
+                                            <div className="mt-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                                                <div className="flex items-center justify-between mb-1.5 px-1">
+                                                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                                                        {msg.artifactType.replace(/_/g, ' ')}
+                                                    </span>
+                                                    <button className="text-[9px] text-indigo-400 hover:text-white transition-colors" title="Copy to Clipboard">
+                                                        <i className="fas fa-copy"></i> Copy
+                                                    </button>
+                                                </div>
+                                                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 font-mono text-[10px] overflow-x-auto shadow-inner text-emerald-400/80">
+                                                    <pre>{msg.artifactContent}</pre>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             ))}

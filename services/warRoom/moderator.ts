@@ -40,7 +40,7 @@ export class Moderator {
 
         // Define explicit Persona System Prompts for context
         const personaContext = PersonaRegistry.getAllPersonas().map(p =>
-            `Role: ${p.role}\nName: ${p.name}\nTrigger Keywords: ${p.keywords.join(', ')}\nPersonality: ${p.toneDescription}`
+            `Role: ${p.role}\nName: ${p.name}\nTrigger Keywords: ${p.keywords.join(', ')}\nPersonality: ${p.toneDescription}\nToolbox: ${p.toolboxDescription || "None"}`
         ).join('\n---\n');
 
         const systemPrompt = `
@@ -60,23 +60,27 @@ export class Moderator {
             
             YOUR GOAL:
             Analyze the user's latest input ("${input}") and the recent transcript.
-            1. Determine the MOST relevant agent to respond (if any). Priority:
-               - Did the user mention specific keywords? (e.g. "design" -> Lead UX)
-               - Is there a strategic conflict? (e.g. ignoring scalability -> Architect)
-               - If general, default to End User or PM.
-            2. Generate the Agent's response. It should be:
-               - Critical, pointed, and short (under 2 sentences).
-               - REFLECT THE STAGE DATA. If the user mentions "Login", critique the specific login flow in the Stage Data.
-               - In character (e.g. PM asks about "Why?", Dev about "How?").
-               - 10-15% chance of being an "Interjection" (strong disagreement).
-            3. Update the "Panel Sentiment Score" (0-100%).
-               - If user addresses risks well -> Score up.
-               - If user is vague -> Score down.
+            1. Select the Expert Agent best suited to SOLVE the problem.
+            2. PERFORM EXPERT ANALYSIS (Chain of Thought):
+               - Identify the specific problem.
+               - Determine the root cause.
+               - Propose a concrete solution.
+            3. GENERATE ARTIFACTS:
+               - If the solution requires visualization, generate a "MERMAID_DIAGRAM".
+               - If it requires logic, generate a "CODE_BLOCK".
+               - If it requires planning, generate a "MARKDOWN_TABLE".
             
             OUTPUT JSON ONLY:
             {
                 "nextSpeakerRole": "PRODUCT_MANAGER" | "ARCHITECT" | "TECH_LEAD" | "DELIVERY_MANAGER" | "END_USER" | "DEVELOPER" | "LEAD_UX",
-                "responseContent": "string",
+                "expertAnalysis": {
+                    "problemIdentified": "string",
+                    "rootCause": "string",
+                    "proposedSolution": "string"
+                },
+                "responseContent": "string (The verbal explanation)",
+                "artifactType": "MERMAID_DIAGRAM" | "CODE_BLOCK" | "MARKDOWN_TABLE" | "NONE",
+                "artifactContent": "string (The usage code for the artifact, empty if NONE)",
                 "sentimentScore": number (0-100),
                 "shouldDebate": boolean
             }
@@ -90,7 +94,7 @@ export class Moderator {
             const response = await callGeminiAgent(
                 GeminiCapability.CHAT,
                 systemPrompt,
-                `Recent Transcript:\n${recentTranscript}\n\nUser Input: ${input}\n\nGenerate next turn JSON:`,
+                `Recent Transcript:\n${recentTranscript}\n\nUser Input: ${input}\n\nGenerate next turn JSON with Expert Analysis:`,
                 [],
                 true // jsonMode
             );
@@ -105,8 +109,11 @@ export class Moderator {
                     speakerRole: agent.role,
                     speakerName: agent.name,
                     content: aiData.responseContent,
-                    sentiment: aiData.sentimentScore / 100, // Normalize to 0-1 if needed, but we used 0-100 in prompt. App uses 0-100.
-                    stage: stage
+                    sentiment: aiData.sentimentScore / 100, // Normalize to 0-1
+                    stage: stage,
+                    expertAnalysis: aiData.expertAnalysis,
+                    artifactType: aiData.artifactType !== 'NONE' ? aiData.artifactType : undefined,
+                    artifactContent: aiData.artifactType !== 'NONE' ? aiData.artifactContent : undefined
                 };
 
                 updatedContext = {
@@ -124,10 +131,10 @@ export class Moderator {
             // Fallback Logic (Heuristic)
             let nextSpeaker = PersonaRegistry.getPersonaByKeyword(input);
             if (!nextSpeaker) {
-                if (stage === DiscoveryStage.KPI) nextSpeaker = PersonaRegistry.getPersona('PRODUCT_MANAGER'); // Replaced CFO
+                if (stage === DiscoveryStage.KPI) nextSpeaker = PersonaRegistry.getPersona('PRODUCT_MANAGER');
                 else if (stage === DiscoveryStage.EPICS) nextSpeaker = PersonaRegistry.getPersona('END_USER');
-                else if (stage === DiscoveryStage.BOD) nextSpeaker = PersonaRegistry.getPersona('LEAD_UX'); // Replaced Risk Hawk (approx)
-                else nextSpeaker = PersonaRegistry.getPersona('TECH_LEAD'); // Replaced SME
+                else if (stage === DiscoveryStage.BOD) nextSpeaker = PersonaRegistry.getPersona('LEAD_UX');
+                else nextSpeaker = PersonaRegistry.getPersona('TECH_LEAD');
             }
 
             if (nextSpeaker) {
