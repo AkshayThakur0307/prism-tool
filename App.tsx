@@ -2019,12 +2019,12 @@ ${confluenceCapture}
           {/* Virtual War Room CTA */}
           <button
             onClick={() => setShowWarRoomModal(true)}
-            className={`w-full text-left rounded-lg transition-all duration-300 group relative flex flex-col items-center gap-1.5 overflow-hidden border border-dashed border-slate-700/50 hover:border-red-500/30 hover:bg-red-900/5 text-slate-500 hover:text-red-400
+            className={`w-full text-left rounded-lg transition-all duration-300 group relative flex flex-col items-center gap-1.5 overflow-hidden border border-dashed border-slate-700/50 hover:border-indigo-500/30 hover:bg-indigo-900/5 text-slate-500 hover:text-indigo-400
               ${isCollapsed ? 'p-1.5 justify-center' : 'py-2 px-1'}`}
             title="Virtual War Room"
           >
-            <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 border transition-all duration-300 bg-slate-800/50 border-transparent group-hover:bg-red-900/10 group-hover:border-red-500/20`}>
-              <i className="fas fa-users-viewfinder text-[10px] text-slate-500 group-hover:text-red-400 transition-colors duration-300"></i>
+            <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 border transition-all duration-300 bg-slate-800/50 border-transparent group-hover:bg-indigo-900/10 group-hover:border-indigo-500/20`}>
+              <i className="fas fa-users-viewfinder text-[10px] text-slate-500 group-hover:text-indigo-400 transition-colors duration-300"></i>
             </div>
             {!isCollapsed && (
               <div className="text-center min-w-0 animate-in fade-in duration-300">
