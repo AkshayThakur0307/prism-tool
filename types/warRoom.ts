@@ -1,5 +1,5 @@
 
-import { DiscoveryStage, ProjectMetadata } from '../types';
+import { DiscoveryStage, ProjectMetadata, FileContext } from '../types';
 
 export interface WarRoomContext {
     stageInput: string;
@@ -7,12 +7,13 @@ export interface WarRoomContext {
     projectMetadata: ProjectMetadata;
 }
 
-export type PersonaRole = 'PRODUCT_MANAGER' | 'ARCHITECT' | 'TECH_LEAD' | 'DELIVERY_MANAGER' | 'END_USER' | 'DEVELOPER' | 'LEAD_UX' | 'MODERATOR';
+// Relaxed to string to allow custom roles, but keeping unions for strict typing of defaults where possible
+export type PersonaRole = 'PRODUCT_MANAGER' | 'ARCHITECT' | 'TECH_LEAD' | 'DELIVERY_MANAGER' | 'END_USER' | 'DEVELOPER' | 'LEAD_UX' | 'MODERATOR' | string;
 
 export interface InteractionEvent {
     id: string;
     timestamp: number;
-    speakerRole: PersonaRole | 'STRATEGIST'; // STRATEGIST = The human user
+    speakerRole: PersonaRole; // Removed 'STRATEGIST' explicit union as it's covered by string, but practically we treat it specially
     speakerName: string; // e.g., "CFO (Marcus)" or "You"
     content: string; // The text transcript
     sentiment?: number; // 0.0 to 1.0 (Critical to Positive)
@@ -39,6 +40,7 @@ export interface PersonaAgent {
     toneDescription?: string; // e.g., "Analytical, Dry, Fast-paced"
     toolboxDescription?: string; // e.g., "Generates Mermaid Diagrams"
     keywords: string[]; // Keywords that might trigger this agent to interject
+    isCustom?: boolean; // Flag to identify user-created agents
 }
 
 export interface SessionState {
@@ -51,4 +53,5 @@ export interface SessionState {
     panelSentimentScore: number; // 0-100%
     currentTurn?: PersonaRole | 'STRATEGIST';
     pendingInterjection?: PersonaRole; // If an agent is "raising their hand"
+    contextFiles: FileContext[]; // Multimodal files available to all agents
 }

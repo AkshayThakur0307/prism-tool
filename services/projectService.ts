@@ -346,5 +346,41 @@ export const projectService = {
             console.error("Error deleting shadow analyses:", error);
             throw error;
         }
+    },
+
+    // --- WAR ROOM PERSISTENCE ---
+    saveWarRoomSession: async (projectId: string, session: any): Promise<void> => {
+        try {
+            const sessionsRef = collection(db, PROJECTS_COLLECTION, projectId, 'war_room_sessions');
+            const docRef = doc(sessionsRef, session.id);
+            // Ensure no undefined values
+            const safeSession = JSON.parse(JSON.stringify(session));
+            await setDoc(docRef, safeSession, { merge: true });
+        } catch (error) {
+            console.error("Error saving war room session:", error);
+            throw error;
+        }
+    },
+
+    getWarRoomSessions: async (projectId: string): Promise<any[]> => {
+        try {
+            const sessionsRef = collection(db, PROJECTS_COLLECTION, projectId, 'war_room_sessions');
+            const q = query(sessionsRef, orderBy('startTime', 'desc'));
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(doc => doc.data());
+        } catch (error) {
+            console.error("Error fetching war room sessions:", error);
+            // Return empty if collection doesn't exist yet
+            return [];
+        }
+    },
+
+    deleteWarRoomSession: async (projectId: string, sessionId: string): Promise<void> => {
+        try {
+            await deleteDoc(doc(db, PROJECTS_COLLECTION, projectId, 'war_room_sessions', sessionId));
+        } catch (error) {
+            console.error("Error deleting war room session:", error);
+            throw error;
+        }
     }
 };

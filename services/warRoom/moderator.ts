@@ -16,7 +16,8 @@ export class Moderator {
         input: string,
         context: SessionState,
         stage: DiscoveryStage,
-        stageContext: WarRoomContext // Updated signature
+        stageContext: WarRoomContext, // Updated signature
+        availableAgents: PersonaAgent[] // NEW: Pass explicit list of active agents
     ): Promise<SessionState> {
 
         // 1. Log User Input
@@ -38,10 +39,12 @@ export class Moderator {
         // 2. Construct LLM Prompt for Dynamic Moderation
         const recentTranscript = updatedContext.transcript.slice(-6).map(t => `${t.speakerRole}: ${t.content}`).join('\n');
 
-        // Define explicit Persona System Prompts for context
-        const personaContext = PersonaRegistry.getAllPersonas().map(p =>
+        // Define explicit Persona System Prompts for context based on AVAILABLE agents
+        const personaContext = availableAgents.map(p =>
             `Role: ${p.role}\nName: ${p.name}\nTrigger Keywords: ${p.keywords.join(', ')}\nPersonality: ${p.toneDescription}\nToolbox: ${p.toolboxDescription || "None"}`
         ).join('\n---\n');
+
+        const validRoles = availableAgents.map(a => a.role).join(" | ");
 
         const systemPrompt = `
             You are the "War Room Moderator" for a high-stakes product discovery session.
@@ -72,7 +75,7 @@ export class Moderator {
             
             OUTPUT JSON ONLY:
             {
-                "nextSpeakerRole": "PRODUCT_MANAGER" | "ARCHITECT" | "TECH_LEAD" | "DELIVERY_MANAGER" | "END_USER" | "DEVELOPER" | "LEAD_UX",
+                "nextSpeakerRole": "${validRoles}",
                 "expertAnalysis": {
                     "problemIdentified": "string",
                     "rootCause": "string",
@@ -95,12 +98,14 @@ export class Moderator {
                 GeminiCapability.CHAT,
                 systemPrompt,
                 `Recent Transcript:\n${recentTranscript}\n\nUser Input: ${input}\n\nGenerate next turn JSON with Expert Analysis:`,
-                [],
+                context.contextFiles || [], // Pass multimodal context
                 true // jsonMode
             );
 
             const aiData = JSON.parse(response.text);
-            const agent = PersonaRegistry.getPersona(aiData.nextSpeakerRole as PersonaRole);
+
+            // Look up agent from the PASSED availableAgents list, not just the registry
+            const agent = availableAgents.find(a => a.role === aiData.nextSpeakerRole);
 
             if (agent) {
                 const agentEvent: InteractionEvent = {
@@ -128,13 +133,12 @@ export class Moderator {
         } catch (error) {
             console.error("Moderator AI Failed, falling back to heuristic:", error);
 
-            // Fallback Logic (Heuristic)
-            let nextSpeaker = PersonaRegistry.getPersonaByKeyword(input);
-            if (!nextSpeaker) {
-                if (stage === DiscoveryStage.KPI) nextSpeaker = PersonaRegistry.getPersona('PRODUCT_MANAGER');
-                else if (stage === DiscoveryStage.EPICS) nextSpeaker = PersonaRegistry.getPersona('END_USER');
-                else if (stage === DiscoveryStage.BOD) nextSpeaker = PersonaRegistry.getPersona('LEAD_UX');
-                else nextSpeaker = PersonaRegistry.getPersona('TECH_LEAD');
+            // Fallback Logic (Heuristic) - Simplified to just pick a random available agent or specific role if present
+            let nextSpeaker = availableAgents.find(a => a.keywords.some(k => input.toLowerCase().includes(k)));
+
+            if (!nextSpeaker && availableAgents.length > 0) {
+                // Fallback to first agent if no keyword match
+                nextSpeaker = availableAgents[0];
             }
 
             if (nextSpeaker) {

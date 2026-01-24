@@ -4155,13 +4155,14 @@ ${confluenceCapture}
         isOpen={showWarRoomModal}
         onClose={() => setShowWarRoomModal(false)}
         currentStage={state.currentStage}
-        projectContext={state.projectMetadata}
+        projectContext={state.projectMetadata} // Legacy
         userName={user?.displayName || 'Strategist'}
         stageContext={{
-          stageInput: state.stages[state.currentStage]?.input || '',
-          stageOutput: state.stages[state.currentStage]?.output || '',
+          stageInput: state.stages[state.currentStage].input,
+          stageOutput: state.stages[state.currentStage].output,
           projectMetadata: state.projectMetadata
         }}
+        projectId={activeProjectId || 'default-project'}
       />
     </div >
   );

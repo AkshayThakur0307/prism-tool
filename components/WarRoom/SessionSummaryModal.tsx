@@ -33,25 +33,76 @@ export const SessionSummaryModal: React.FC<SessionSummaryModalProps> = ({
                         {/* We render simple markdown here. For a real app, use a markdown renderer. 
                             For MVP, we trust the LLM structure or do basic replacement. */}
                         <div className="whitespace-pre-wrap font-sans text-slate-300 leading-relaxed">
-                            {summaryMarkdown}
+                            <div id="summary-content" className="whitespace-pre-wrap font-sans text-slate-300 leading-relaxed">
+                                {summaryMarkdown}
+                            </div>
                         </div>
                     </div>
+
                 </div>
 
                 {/* Actions */}
-                <div className="p-6 border-t border-slate-700/50 bg-slate-950/30 flex justify-end gap-3">
+                <div className="p-6 border-t border-slate-800 flex justify-end gap-3 bg-slate-900/50">
                     <button
                         onClick={onDiscard}
-                        className="px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-wider text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                        className="px-4 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors text-xs font-bold uppercase tracking-wider"
                     >
-                        Discard
+                        Close
                     </button>
                     <button
-                        onClick={onApplyToBacklog}
-                        className="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase tracking-wider shadow-lg shadow-emerald-900/20 flex items-center gap-2 transition-all"
+                        onClick={() => {
+                            // Export Transcript as TXT
+                            const blob = new Blob([summaryMarkdown], { type: 'text/plain' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `WarRoom_Transcript_${new Date().toISOString().slice(0, 10)}.txt`;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(url);
+                        }}
+                        className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 hover:border-slate-500 transition-all text-xs font-bold uppercase tracking-wider flex items-center gap-2"
                     >
-                        <i className="fas fa-check-circle"></i>
-                        Apply to Backlog
+                        <i className="fas fa-file-alt"></i> Export TXT
+                    </button>
+                    <button
+                        onClick={() => {
+                            // Export as Word Doc (HTML trick)
+                            const header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>War Room Summary</title></head><body>";
+                            const footer = "</body></html>";
+                            const sourceHTML = header + document.getElementById('summary-content')?.innerHTML + footer;
+
+                            const blob = new Blob(['\ufeff', sourceHTML], { type: 'application/msword' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `WarRoom_Summary_${new Date().toISOString().slice(0, 10)}.doc`;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                        }}
+                        className="px-4 py-2 rounded-lg bg-blue-600/10 text-blue-400 border border-blue-500/30 hover:bg-blue-600/20 transition-all text-xs font-bold uppercase tracking-wider flex items-center gap-2"
+                    >
+                        <i className="fas fa-file-word"></i> Export Doc
+                    </button>
+                    <button
+                        onClick={() => {
+                            // Print to PDF
+                            const printWindow = window.open('', '', 'height=600,width=800');
+                            if (printWindow) {
+                                printWindow.document.write('<html><head><title>War Room Report</title>');
+                                printWindow.document.write('<style>body { font-family: sans-serif; padding: 40px; } h1 { color: #333; } p { line-height: 1.6; color: #555; } .prose { max-width: 100%; }</style>');
+                                printWindow.document.write('</head><body>');
+                                printWindow.document.write(document.getElementById('summary-content')?.innerHTML || '');
+                                printWindow.document.write('</body></html>');
+                                printWindow.document.close();
+                                printWindow.print();
+                            }
+                        }}
+                        className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20 text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-2"
+                    >
+                        <i className="fas fa-file-pdf"></i> Export PDF
                     </button>
                 </div>
             </div>
