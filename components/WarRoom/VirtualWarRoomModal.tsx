@@ -296,19 +296,19 @@ export const VirtualWarRoomModal: React.FC<VirtualWarRoomModalProps> = ({
 
     const getAgentIcon = (role: PersonaRole) => {
         switch (role) {
-            case 'PRODUCT_MANAGER': return '👨‍💼';
-            case 'ARCHITECT': return '📐';
-            case 'TECH_LEAD': return '🛠️';
-            case 'DELIVERY_MANAGER': return '⏱️';
-            case 'LEAD_UX': return '🎨';
-            case 'END_USER': return '👤';
-            case 'DEVELOPER': return '💻';
-            default: return '🤖';
+            case 'PRODUCT_MANAGER': return <i className="fas fa-user-tie"></i>;
+            case 'ARCHITECT': return <i className="fas fa-sitemap mt-1"></i>;
+            case 'TECH_LEAD': return <i className="fas fa-microchip"></i>;
+            case 'DELIVERY_MANAGER': return <i className="fas fa-clipboard-check"></i>;
+            case 'LEAD_UX': return <i className="fas fa-palette"></i>;
+            case 'END_USER': return <i className="fas fa-user-tag"></i>;
+            case 'DEVELOPER': return <i className="fas fa-laptop-code"></i>;
+            default: return <i className="fas fa-robot"></i>;
         }
     };
 
     return (
-        <div className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-300">
             {isConfiguring ? (
                 <div className="w-full max-w-5xl h-[85vh] relative rounded-3xl overflow-hidden shadow-2xl ring-1 ring-white/5">
                     <WarRoomSetup

@@ -382,5 +382,39 @@ export const projectService = {
             console.error("Error deleting war room session:", error);
             throw error;
         }
+    },
+
+    // --- WAR ROOM AGENTS PERSISTENCE ---
+    getWarRoomAgents: async (projectId: string): Promise<any[]> => {
+        try {
+            const agentsRef = collection(db, PROJECTS_COLLECTION, projectId, 'war_room_agents');
+            const snapshot = await getDocs(agentsRef);
+            return snapshot.docs.map(doc => doc.data());
+        } catch (error) {
+            console.error("Error fetching war room agents:", error);
+            return [];
+        }
+    },
+
+    saveWarRoomAgent: async (projectId: string, agent: any): Promise<void> => {
+        try {
+            const agentsRef = collection(db, PROJECTS_COLLECTION, projectId, 'war_room_agents');
+            const docRef = doc(agentsRef, agent.id);
+            // Ensure no undefined
+            const safeAgent = JSON.parse(JSON.stringify(agent));
+            await setDoc(docRef, safeAgent, { merge: true });
+        } catch (error) {
+            console.error("Error saving war room agent:", error);
+            throw error;
+        }
+    },
+
+    deleteWarRoomAgent: async (projectId: string, agentId: string): Promise<void> => {
+        try {
+            await deleteDoc(doc(db, PROJECTS_COLLECTION, projectId, 'war_room_agents', agentId));
+        } catch (error) {
+            console.error("Error deleting war room agent:", error);
+            throw error;
+        }
     }
 };

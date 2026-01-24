@@ -50,22 +50,47 @@ export const WarRoomSetup: React.FC<WarRoomSetupProps> = ({ onStartSession, onRe
         // Load Defaults (Filtering out deleted ones)
         const defaults = PersonaRegistry.getAllPersonas().filter(p => !deletedSet.has(p.id));
 
-        // Load Custom from LocalStorage (Global)
-        const customJson = localStorage.getItem('war_room_custom_agents');
-        const custom: PersonaAgent[] = customJson ? JSON.parse(customJson) : [];
+        // Load Custom from Firebase
+        const loadData = async () => {
+            try {
+                // Determine if we ignore TypeScript error or cast
+                // Ideally we import projectService but waiting for next chunk
+                const { projectService } = await import('../../services/projectService');
 
-        setAvailableAgents([...defaults, ...custom]);
+                // MIGRATION CHECK: Check LocalStorage one last time
+                const legacyCustomJson = localStorage.getItem('war_room_custom_agents');
+                if (legacyCustomJson) {
+                    const legacyAgents: PersonaAgent[] = JSON.parse(legacyCustomJson);
+                    if (legacyAgents.length > 0) {
+                        console.log("[Migration] Found legacy agents, uploading to Firebase...");
+                        for (const agent of legacyAgents) {
+                            await projectService.saveWarRoomAgent(projectId, agent);
+                        }
+                        // Clear after migration to avoid re-running
+                        localStorage.removeItem('war_room_custom_agents');
+                        console.log("[Migration] Legacy agents migrated and cleared.");
+                    }
+                }
 
-        // Default select all defaults (up to cap) if not explicitly deselected? 
-        // For now, only select if we have filtered list
-        const defaultIds = new Set(defaults.map(a => a.id));
-        setSelectedAgentIds(defaultIds);
+                // Load Project Agents (which now includes migrated ones)
+                const projectAgents = await projectService.getWarRoomAgents(projectId);
+
+                setAvailableAgents([...defaults, ...projectAgents]);
+            } catch (error) {
+                console.error("Failed to load/migrate agents:", error);
+                // Fallback to just defaults if fail
+                setAvailableAgents(defaults);
+            }
+        };
+
+        // const defaultIds = new Set(defaults.map(a => a.id));
+        // setSelectedAgentIds(defaultIds);
+
+        loadData();
 
         // Load History (Project Scoped) - MIGRATED TO FIREBASE
         const loadHistory = async () => {
             try {
-                // Determine if we ignore TypeScript error or cast
-                // Ideally we import projectService but waiting for next chunk
                 const { projectService } = await import('../../services/projectService');
                 const sessions = await projectService.getWarRoomSessions(projectId);
                 setHistory(sessions);
@@ -98,7 +123,7 @@ export const WarRoomSetup: React.FC<WarRoomSetupProps> = ({ onStartSession, onRe
         setSelectedAgentIds(newSet);
     };
 
-    const handleCreateAgent = () => {
+    const handleCreateAgent = async () => {
         if (!newAgent.name || !newAgent.role || !newAgent.toneDescription) return;
 
         const customAgent: PersonaAgent = {
@@ -113,28 +138,27 @@ export const WarRoomSetup: React.FC<WarRoomSetupProps> = ({ onStartSession, onRe
             isCustom: true
         };
 
-        // Determine Save Logic
-        const currentCustomJson = localStorage.getItem('war_room_custom_agents');
-        const currentCustom: PersonaAgent[] = currentCustomJson ? JSON.parse(currentCustomJson) : [];
+        try {
+            const { projectService } = await import('../../services/projectService');
+            await projectService.saveWarRoomAgent(projectId, customAgent);
 
-        // If editing existing custom, remove old version first
-        const others = currentCustom.filter(a => a.id !== customAgent.id);
-        const updatedCustom = [...others, customAgent];
+            // Refresh List
+            const projectAgents = await projectService.getWarRoomAgents(projectId);
+            const defaults = PersonaRegistry.getAllPersonas().filter(p => !deletedDefaultIds.has(p.id));
+            setAvailableAgents([...defaults, ...projectAgents]);
 
-        localStorage.setItem('war_room_custom_agents', JSON.stringify(updatedCustom));
+            // Select it
+            const newSet = new Set(selectedAgentIds);
+            newSet.add(customAgent.id);
+            setSelectedAgentIds(newSet);
 
-        // Refresh List (re-merge with defaults)
-        const defaults = PersonaRegistry.getAllPersonas().filter(p => !deletedDefaultIds.has(p.id));
-        setAvailableAgents([...defaults, ...updatedCustom]);
-
-        // Select the new/edited one
-        const newSet = new Set(selectedAgentIds);
-        newSet.add(customAgent.id);
-        setSelectedAgentIds(newSet);
-
-        // Reset and Switch Tab
-        setTab('SELECT');
-        setNewAgent({ name: '', role: '', toneDescription: '', keywords: [], voiceId: '' });
+            // Reset and Switch Tab
+            setTab('SELECT');
+            setNewAgent({ name: '', role: '', toneDescription: '', keywords: [], voiceId: '' });
+        } catch (e) {
+            console.error("Failed to save agent", e);
+            alert("Failed to save agent. Please try again.");
+        }
     };
 
     const handleEditAgent = (agent: PersonaAgent, e: React.MouseEvent) => {
@@ -163,18 +187,21 @@ export const WarRoomSetup: React.FC<WarRoomSetupProps> = ({ onStartSession, onRe
     const handleDeleteAgent = (agent: PersonaAgent, e: React.MouseEvent, isSystemAction: boolean = false) => {
         e.stopPropagation();
 
-        const proceedDelete = () => {
+        const proceedDelete = async () => {
             if (agent.isCustom) {
-                // Permanently Delete Custom
-                const currentCustomJson = localStorage.getItem('war_room_custom_agents');
-                const currentCustom: PersonaAgent[] = currentCustomJson ? JSON.parse(currentCustomJson) : [];
-                const updated = currentCustom.filter(a => a.id !== agent.id);
-                localStorage.setItem('war_room_custom_agents', JSON.stringify(updated));
+                // Permanently Delete Custom from Firebase
+                try {
+                    const { projectService } = await import('../../services/projectService');
+                    await projectService.deleteWarRoomAgent(projectId, agent.id);
 
-                // Update State
-                setAvailableAgents(prev => prev.filter(a => a.id !== agent.id));
+                    // Update State
+                    setAvailableAgents(prev => prev.filter(a => a.id !== agent.id));
+                } catch (err) {
+                    console.error("Failed to delete agent", err);
+                    alert("Failed to delete agent.");
+                }
             } else {
-                // "Delete" Default = Hide it
+                // "Delete" Default = Hide it (Local Storage pref is fine for this user-pref)
                 const newDeleted = new Set(deletedDefaultIds);
                 newDeleted.add(agent.id);
                 setDeletedDefaultIds(newDeleted);
@@ -211,14 +238,16 @@ export const WarRoomSetup: React.FC<WarRoomSetupProps> = ({ onStartSession, onRe
             message: "This will restore all default agents that were previously hidden.",
             isDestructive: true,
             confirmLabel: "Restore",
-            onConfirm: () => {
+            onConfirm: async () => {
                 localStorage.removeItem('war_room_deleted_defaults');
                 setDeletedDefaultIds(new Set());
+
                 // Reload all
                 const defaults = PersonaRegistry.getAllPersonas();
-                const customJson = localStorage.getItem('war_room_custom_agents');
-                const custom: PersonaAgent[] = customJson ? JSON.parse(customJson) : [];
-                setAvailableAgents([...defaults, ...custom]);
+                const { projectService } = await import('../../services/projectService');
+                const projectAgents = await projectService.getWarRoomAgents(projectId);
+
+                setAvailableAgents([...defaults, ...projectAgents]);
             }
         });
     };
@@ -304,7 +333,7 @@ export const WarRoomSetup: React.FC<WarRoomSetupProps> = ({ onStartSession, onRe
                                     key={agent.id}
                                     onClick={() => toggleAgent(agent.id)}
                                     className={`
-                                        relative group cursor-pointer p-4 rounded-xl border transition-all duration-200
+                                        relative group cursor-pointer p-3 rounded-lg border transition-all duration-200
                                         ${selectedAgentIds.has(agent.id)
                                             ? 'bg-indigo-900/20 border-indigo-500/50 shadow-lg shadow-indigo-500/10'
                                             : 'bg-slate-900 border-slate-800 hover:border-slate-700 opacity-60 hover:opacity-100'}
@@ -312,20 +341,33 @@ export const WarRoomSetup: React.FC<WarRoomSetupProps> = ({ onStartSession, onRe
                                 >
                                     <div className="flex items-center justify-between mb-2">
                                         <div className="flex items-center gap-2">
-                                            <div className="text-2xl">{agent.isCustom ? '👤' : '🤖'}</div>
+                                            <div className="w-7 h-7 rounded-md bg-slate-800 flex items-center justify-center border border-slate-700 text-slate-400">
+                                                {agent.isCustom ? (
+                                                    <i className="fas fa-user-gear text-indigo-400 text-xs"></i>
+                                                ) : (
+                                                    <i className={`fas text-xs ${agent.role === 'PRODUCT_MANAGER' ? 'fa-user-tie text-emerald-400' :
+                                                        agent.role === 'ARCHITECT' ? 'fa-sitemap text-indigo-400' :
+                                                            agent.role === 'TECH_LEAD' ? 'fa-microchip text-blue-400' :
+                                                                agent.role === 'LEAD_UX' ? 'fa-palette text-purple-400' :
+                                                                    agent.role === 'DELIVERY_MANAGER' ? 'fa-clipboard-check text-amber-400' :
+                                                                        agent.role === 'END_USER' ? 'fa-user-tag text-pink-400' :
+                                                                            'fa-robot'
+                                                        }`}></i>
+                                                )}
+                                            </div>
                                             {agent.isCustom && (
-                                                <div className="px-1.5 py-0.5 rounded bg-slate-800 text-[9px] text-slate-400 font-bold border border-slate-700">CUSTOM</div>
+                                                <div className="px-1.5 py-0.5 rounded bg-slate-800 text-[8px] text-slate-400 font-bold border border-slate-700">CUSTOM</div>
                                             )}
                                         </div>
                                         {selectedAgentIds.has(agent.id) && (
-                                            <div className="w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center">
-                                                <i className="fas fa-check text-[10px] text-white"></i>
+                                            <div className="w-4 h-4 rounded-full bg-indigo-500 flex items-center justify-center shadow-md shadow-indigo-500/50">
+                                                <i className="fas fa-check text-[8px] text-white"></i>
                                             </div>
                                         )}
                                     </div>
-                                    <h3 className="text-white font-bold text-sm mb-0.5">{agent.name}</h3>
-                                    <div className="text-[10px] text-indigo-400 font-mono uppercase tracking-wider mb-2">{agent.role}</div>
-                                    <p className="text-xs text-slate-500 line-clamp-2">{agent.toneDescription}</p>
+                                    <h3 className="text-white font-bold text-xs mb-0.5 mt-1">{agent.name}</h3>
+                                    <div className="text-[9px] text-indigo-400 font-mono uppercase tracking-wider mb-1.5">{agent.role}</div>
+                                    <p className="text-[10px] text-slate-500 line-clamp-2 leading-relaxed">{agent.toneDescription}</p>
 
                                     {/* Edit/Delete Actions overlay on hover */}
                                     <div className="absolute bottom-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -400,7 +442,7 @@ export const WarRoomSetup: React.FC<WarRoomSetupProps> = ({ onStartSession, onRe
                                 <button
                                     onClick={handleCreateAgent}
                                     disabled={!newAgent.name || !newAgent.role || !newAgent.toneDescription}
-                                    className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold uppercase tracking-wider transition-colors"
+                                    className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold uppercase tracking-wider transition-colors shadow-md shadow-indigo-500/20"
                                 >
                                     Save Agent to Library
                                 </button>
@@ -465,7 +507,7 @@ export const WarRoomSetup: React.FC<WarRoomSetupProps> = ({ onStartSession, onRe
                         onStartSession(selected);
                     }}
                     disabled={selectedAgentIds.size === 0}
-                    className="px-8 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-bold uppercase tracking-widest shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold uppercase tracking-wider shadow-md shadow-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >
                     Enter War Room <i className="fas fa-arrow-right ml-2"></i>
                 </button>
