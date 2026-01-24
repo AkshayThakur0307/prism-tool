@@ -44,7 +44,14 @@ service cloud.firestore {
       // Sub-collection: War Room Sessions
       match /war_room_sessions/{sessionId} {
          allow read, write: if request.auth != null && (
+             // Owner Check
              get(/databases/$(database)/documents/projects/$(projectId)).data.userId == request.auth.uid ||
+             // Shared User Check (if applicable)
+             (
+                get(/databases/$(database)/documents/projects/$(projectId)).data.sharedEmails != null &&
+                request.auth.token.email in get(/databases/$(database)/documents/projects/$(projectId)).data.sharedEmails
+             ) ||
+             // Admin
              getUserRole() == 'admin'
          );
       }
