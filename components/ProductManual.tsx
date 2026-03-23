@@ -97,11 +97,11 @@ const ProductManual: React.FC<ProductManualProps> = ({ onClose }) => {
                 <span className="text-3xl font-black text-indigo-500/50">01.</span>
                 <h3 className="text-2xl font-black text-white uppercase tracking-tight">Strategic Baseline (Global Context)</h3>
               </div>
-              <p className="text-slate-400 leading-relaxed">The Discovery Pro workspace features an optional global configuration. This baseline acts as the "North Star" for the AI agents, ensuring every output—from Domain to Backlog—is perfectly aligned with your business identity.</p>
+              <p className="text-slate-400 leading-relaxed">The Discovery Pro workspace features an optional global configuration. This baseline acts as the "North Star" for the AI agents, ensuring every output—from Market Research to Backlog—is perfectly aligned with your business identity.</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {[
                   { l: "Company Persona", d: "Sets the corporate tone and historical context." },
-                  { l: "Target Vertical", d: "Forces the AI to use domain-specific language and benchmarks." },
+                  { l: "Target Vertical", d: "Forces the AI to use market-specific language and benchmarks." },
                   { l: "Market Focus (TAM)", d: "Quantifies the growth expectations and scale constraints." },
                   { l: "Competitive Benchmarks", d: "The anchor for all SWOT and Differentiation analyses." }
                 ].map((item, i) => (
@@ -123,7 +123,7 @@ const ProductManual: React.FC<ProductManualProps> = ({ onClose }) => {
                 <div className="flex items-center gap-6 group">
                   <div className="w-14 h-14 bg-slate-900 border border-slate-800 rounded-2xl flex items-center justify-center text-xl text-indigo-500 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-500 shrink-0">01</div>
                   <div>
-                    <h5 className="text-[14px] font-black text-white uppercase tracking-wider">Domain Strategy</h5>
+                    <h5 className="text-[14px] font-black text-white uppercase tracking-wider">Market Research</h5>
                     <p className="text-xs text-slate-500 mt-1 leading-relaxed">Competitive intelligence, SWOT identification, and strategic moat formulation. Outputs the core value proposition and market position.</p>
                   </div>
                 </div>
@@ -232,7 +232,7 @@ const ProductManual: React.FC<ProductManualProps> = ({ onClose }) => {
                     <h4 className="text-sm font-black text-white uppercase tracking-widest">Enterprise RAG (Knowledge Base)</h4>
                     <p className="text-xs text-slate-400 mt-2 leading-relaxed font-medium">
                       Connects the AI to your secure corporate memory (Pinecone Vector Database).
-                      Toggle specific knowledge domains like <strong>Market Intel</strong>, <strong>Jira History</strong>, or <strong>Strategy Docs</strong> to ground the analysis in your unique business context.
+                      Toggle specific knowledge areas like <strong>Market Intel</strong>, <strong>Jira History</strong>, or <strong>Strategy Docs</strong> to ground the analysis in your unique business context.
                       <br /><span className="text-[10px] text-indigo-400 mt-1 block"><i className="fas fa-shield-halved mr-1"></i> Includes Automatic Failover protection (Gemini → Groq).</span>
                     </p>
                   </div>

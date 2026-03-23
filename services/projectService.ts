@@ -9,7 +9,7 @@ const PROJECTS_COLLECTION = 'projects';
 // Helper to create a default empty project state
 export const createDefaultProjectState = (): AppState => ({
     // ... (unchanged)
-    currentStage: DiscoveryStage.DOMAIN,
+    currentStage: DiscoveryStage.MARKET_RESEARCH,
     projectMetadata: {
         companyName: '',
         missionStatement: '',
@@ -25,7 +25,7 @@ export const createDefaultProjectState = (): AppState => ({
         isSearchEnabled: false,
     },
     stages: {
-        [DiscoveryStage.DOMAIN]: { input: '', output: '', files: [], urls: [], status: 'pending', questions: [], answers: {}, versions: [], coherenceScore: 0 },
+        [DiscoveryStage.MARKET_RESEARCH]: { input: '', output: '', files: [], urls: [], status: 'pending', questions: [], answers: {}, versions: [], coherenceScore: 0 },
         [DiscoveryStage.BOD]: { input: '', output: '', files: [], urls: [], status: 'pending', questions: [], answers: {}, versions: [], coherenceScore: 0 },
         [DiscoveryStage.KPI]: { input: '', output: '', files: [], urls: [], status: 'pending', questions: [], answers: {}, versions: [], coherenceScore: 0 },
         [DiscoveryStage.EPICS]: { input: '', output: '', files: [], urls: [], status: 'pending', questions: [], answers: {}, versions: [], coherenceScore: 0 },

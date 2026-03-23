@@ -12,11 +12,11 @@ type ResultTab = 'dna' | 'wargaming' | 'comparison' | 'moat' | 'citations' | 're
 interface Props {
     isOpen: boolean;
     onClose: () => void;
-    domainInput: string;
+    marketResearchInput: string;
     projectId?: string | null;
 }
 
-export const ShadowCompetitorModal: React.FC<Props> = ({ isOpen, onClose, domainInput, projectId }) => {
+export const ShadowCompetitorModal: React.FC<Props> = ({ isOpen, onClose, marketResearchInput, projectId }) => {
     const [step, setStep] = useState<ModalStep>('input');
     const [competitors, setCompetitors] = useState<Array<{ name: string; geography: GeographyDetection }>>([]);
     const [currentInput, setCurrentInput] = useState('');
@@ -169,7 +169,7 @@ export const ShadowCompetitorModal: React.FC<Props> = ({ isOpen, onClose, domain
         try {
             const result = await shadowCompetitorOrchestrator.runFullAnalysis(
                 competitorInputs,
-                userContext.trim() || domainInput,
+                userContext.trim() || marketResearchInput,
                 (phase, competitor, status, prog) => {
                     setCurrentPhase(phase);
                     setCurrentCompetitor(competitor);
@@ -549,7 +549,7 @@ export const ShadowCompetitorModal: React.FC<Props> = ({ isOpen, onClose, domain
                                                     className="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500 outline-none text-xs min-h-[80px] resize-none"
                                                 />
                                                 <div className="absolute bottom-2 right-2 text-[10px] text-slate-600">
-                                                    {userContext ? 'Overrides default context' : 'Default: Domain Input'}
+                                                    {userContext ? 'Overrides default context' : 'Default: Market Research Input'}
                                                 </div>
                                             </div>
                                         </div>

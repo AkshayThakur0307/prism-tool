@@ -15,7 +15,7 @@
 
 **Discovery Accelerator Pro** (aka PRSIM.AI Discovery) is an enterprise-grade product strategy platform designed to transform raw ideas into actionable engineering specifications. It employs a multi-agent AI system to guide users through a structured 4-stage discovery process:
 
-1.  **Domain Analysis**: Market research, problem definition, and competitive landscape.
+1.  **Market Research**: Market research, problem definition, and competitive landscape.
 2.  **BOD (Business Opportunity Document)**: Operational workflows, entity modeling, and system design.
 3.  **KPI Framework**: Success metrics, OKRs, and performance indicators.
 4.  **Epics & Backlog**: Technical specifications, user stories, and acceptance criteria.
@@ -189,7 +189,7 @@ Users move linearly from idea to specs.
 
 ```mermaid
 flowchart LR
-    A[Domain Inputs] -->|Groq Agent| B(Domain Analysis)
+    A[Market Research Inputs] -->|Groq Agent| B(Market Research)
     B -->|Refinement| C{User Approval}
     C -->|Yes| D[BOD Generation]
     D --> E[KPI Framework]

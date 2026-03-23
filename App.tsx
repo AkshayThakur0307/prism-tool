@@ -53,7 +53,7 @@ const INITIAL_METADATA: ProjectMetadata = {
 };
 
 const INITIAL_STATE: AppState = {
-  currentStage: DiscoveryStage.DOMAIN,
+  currentStage: DiscoveryStage.MARKET_RESEARCH,
   projectMetadata: INITIAL_METADATA,
   settings: {
     isThinkingEnabled: false,
@@ -62,7 +62,7 @@ const INITIAL_STATE: AppState = {
     isSearchEnabled: false,
   },
   stages: {
-    [DiscoveryStage.DOMAIN]: { input: '', output: '', files: [], urls: [], status: 'pending', questions: [], answers: {}, versions: [], coherenceScore: 0 },
+    [DiscoveryStage.MARKET_RESEARCH]: { input: '', output: '', files: [], urls: [], status: 'pending', questions: [], answers: {}, versions: [], coherenceScore: 0 },
     [DiscoveryStage.BOD]: { input: '', output: '', files: [], urls: [], status: 'pending', questions: [], answers: {}, versions: [], coherenceScore: 0 },
     [DiscoveryStage.KPI]: { input: '', output: '', files: [], urls: [], status: 'pending', questions: [], answers: {}, versions: [], coherenceScore: 0 },
     [DiscoveryStage.EPICS]: { input: '', output: '', files: [], urls: [], status: 'pending', questions: [], answers: {}, versions: [], coherenceScore: 0 },
@@ -2550,7 +2550,7 @@ ${confluenceCapture}
                           size="sm"
                         />
                       )}
-                      {state.currentStage !== DiscoveryStage.DOMAIN && (
+                      {state.currentStage !== DiscoveryStage.MARKET_RESEARCH && (
                         <button
                           onClick={importPrevious}
                           title="Import History from previous modules"
@@ -2690,7 +2690,7 @@ ${confluenceCapture}
                       )}
                     </div>
 
-                    {state.currentStage !== DiscoveryStage.DOMAIN && (
+                    {state.currentStage !== DiscoveryStage.MARKET_RESEARCH && (
                       <div className={`relative border-2 border-dashed ${!canEditProject ? 'border-slate-800/50 bg-slate-900/20' : 'border-slate-800 hover:border-indigo-500/50 hover:bg-indigo-500/5 cursor-pointer'} rounded-2xl p-4 group transition-all text-center`}>
                         {canEditProject ? (
                           !currentStageData.formatReference ? (
@@ -4147,7 +4147,7 @@ ${confluenceCapture}
       <ShadowCompetitorModal
         isOpen={showShadowCompetitorModal}
         onClose={() => setShowShadowCompetitorModal(false)}
-        domainInput={state.stages[DiscoveryStage.DOMAIN].input}
+        marketResearchInput={state.stages[DiscoveryStage.MARKET_RESEARCH].input}
         projectId={activeProjectId}
       />
 

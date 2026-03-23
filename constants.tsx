@@ -3,19 +3,19 @@ import React from 'react';
 import { DiscoveryStage } from './types';
 
 export const STAGE_CONFIGS = {
-  [DiscoveryStage.DOMAIN]: {
-    title: 'Domain Strategy',
+  [DiscoveryStage.MARKET_RESEARCH]: {
+    title: 'Market Research',
     description: 'Map the strategic landscape and identify core objectives.',
     icon: <i className="fas fa-compass"></i>,
-    label: 'Domain',
+    label: 'Market Research',
     placeholder: "Start by describing your product vision, the problem you're solving, or a raw business case...",
-    cta: "Synthesize Domain",
-    regenerateCta: "Re-Analyze Domain Analysis",
+    cta: "Synthesize Market Research",
+    regenerateCta: "Re-Analyze Market Research",
     agentName: "Strategy Orchestrator",
     systemInstruction: `You are an expert Strategic Product Analyst. 
     Analyze the problem statement and business context. 
     Your output MUST include:
-    1. A detailed Domain Analysis (Market, Users, Value Prop, Risks).
+    1. A detailed Market Research (Market, Users, Value Prop, Risks).
     2. A "COMPETITIVE INTELLIGENCE" section: Based on the provided competitors and vertical, identify 3-5 direct and indirect competitors. Use a table to compare their key strengths and critical weaknesses.
     3. A "DIFFERENTIATION STRATEGY" section: Propose 3-5 unique value propositions or "Strategic Moats" that differentiate our product from the competition.
     4. A section titled "### CLARIFICATION QUESTIONS" containing exactly 3-5 numbered questions for the user to answer to help refine the Business Overview Document in the next stage.
@@ -37,7 +37,7 @@ export const STAGE_CONFIGS = {
     regenerateCta: "Regenerate BOD",
     agentName: "Business Architect",
     systemInstruction: `You are a Senior Business Architect. 
-    Based on the Domain Analysis and previous context, create a Business Overview Document.
+    Based on the Market Research and previous context, create a Business Overview Document.
     Define: Business Goals, Scope, Core Entities, and Process Flows.
     
     SPECIAL REQUIREMENT: Include a "STRATEGIC POSITIONING" section. Deepen the competitive analysis by defining how our product's business logic (e.g., pricing, exclusive data access, or network effects) creates a sustainable competitive advantage over the direct and indirect competitors previously identified.
@@ -63,7 +63,7 @@ export const STAGE_CONFIGS = {
     regenerateCta: "Re-Calculate KPIs",
     agentName: "Performance Analyst",
     systemInstruction: `You are a Product Data Scientist. 
-    Define the North Star, leading, and lagging indicators based on the provided BOD and Domain.
+    Define the North Star, leading, and lagging indicators based on the provided BOD and Market Research.
     Provide measurement strategies and success thresholds.
     IMPORTANT: If a reference format file is provided, strictly follow its data visualization and metrics reporting structure.
     Your output MUST include a section titled "### CLARIFICATION QUESTIONS" with 3-5 questions to help detailed story mapping in the final stage.`,

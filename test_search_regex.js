@@ -10,7 +10,7 @@ GLOBAL PROJECT CONTEXT:
 
 === BACKGROUND HISTORY (READ-ONLY CONTEXT) ===
 NOTE: The following history is for context only. DO NOT perform searches based on errors, logs, or issues found in this history unless explicitly requested in the Active Task Input.
-[DOMAIN ANALYSIS]:
+[MARKET RESEARCH]:
 Some output here...
 ==============================================
 

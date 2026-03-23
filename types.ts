@@ -1,6 +1,6 @@
 
 export enum DiscoveryStage {
-  DOMAIN = 'DOMAIN',
+  MARKET_RESEARCH = 'DOMAIN',
   BOD = 'BOD',
   KPI = 'KPI',
   EPICS = 'EPICS'

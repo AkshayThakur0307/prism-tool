@@ -1,6 +1,6 @@
 {
   "name": "[Main] Product Discovery Accelerator Pro",
-  "description": "Enterprise-grade agentic workflow for product discovery. Multimodal analysis for Domain, BOD, KPIs, and Epics.",
+  "description": "Enterprise-grade agentic workflow for product discovery. Multimodal analysis for Market Research, BOD, KPIs, and Epics.",
   "requestFramePermissions": [
     "camera",
     "microphone"
