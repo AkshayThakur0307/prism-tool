@@ -231,7 +231,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ appState }) => {
       }
 
       const systemInstruction = `
-        You are the "Discovery Pro AI Assistant".
+        You are the "PRISM AI Assistant".
         You just executed a tool.
         
         PREVIOUS TOOL OUTPUT: ${toolResult}
@@ -314,7 +314,7 @@ const ChatBot: React.FC<ChatBotProps> = ({ appState }) => {
       const currentStageData = appState.stages[appState.currentStage];
 
       let systemInstruction = `
-        You are the "Discovery Pro AI Assistant", an expert product strategist.
+        You are the "PRISM AI Assistant", an expert product strategist.
         
         GLOBAL CONTEXT:
         - Company: ${appState.projectMetadata.companyName}

@@ -118,7 +118,7 @@ export class HybridVoiceAssistant {
                 : "No refinement questions currently.";
 
             const systemPrompt = `
-                You are the PRSIM.AI Discovery Voice Assistant.
+                You are the PRISM.AI Discovery Voice Assistant.
                 Current Module: ${this.appState.currentStage} (${STAGE_CONFIGS[this.appState.currentStage].title})
                 Current Text Input: "${currentStageData.input}"
                 ${this.customContext ? `\nFOCUS CONTEXT (User is viewing this output): \n"${this.customContext}"\n` : ''}

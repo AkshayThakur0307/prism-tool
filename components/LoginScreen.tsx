@@ -26,8 +26,8 @@ const LoginScreen: React.FC = () => {
                     <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-indigo-600/30">
                         <i className="fas fa-layer-group text-white text-3xl"></i>
                     </div>
-                    <h1 className="text-3xl font-black text-white mb-2 tracking-tighter uppercase">DISCOVERY PRO</h1>
-                    <p className="text-indigo-400 text-[10px] font-bold tracking-[0.2em] uppercase">PRSIM.AI Material +</p>
+                    <h1 className="text-3xl font-black text-white mb-2 tracking-tighter uppercase">PRISM</h1>
+                    <p className="text-indigo-400 text-[10px] font-bold tracking-[0.2em] uppercase">PRISM.AI Material +</p>
                 </div>
 
                 <button

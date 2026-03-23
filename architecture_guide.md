@@ -1,4 +1,4 @@
-# Discovery Accelerator Pro - Application Architecture Guide
+# PRISM - Application Architecture Guide
 
 ## Table of Contents
 1. [Overview](#overview)
@@ -13,7 +13,7 @@
 
 ## Overview
 
-**Discovery Accelerator Pro** (aka PRSIM.AI Discovery) is an enterprise-grade product strategy platform designed to transform raw ideas into actionable engineering specifications. It employs a multi-agent AI system to guide users through a structured 4-stage discovery process:
+**PRISM** (aka PRISM.AI Discovery) is an enterprise-grade product strategy platform designed to transform raw ideas into actionable engineering specifications. It employs a multi-agent AI system to guide users through a structured 4-stage discovery process:
 
 1.  **Market Research**: Market research, problem definition, and competitive landscape.
 2.  **BOD (Business Opportunity Document)**: Operational workflows, entity modeling, and system design.
@@ -225,8 +225,8 @@ How the system ensures search results are relevant (The "Audit Trail").
 - **Context-Aware**: The Voice Assistant knows *exactly* which text block is being edited.
 
 ### 4. Branding & Visual Identity
-- **Theme**: "Discovery Pro" Dark Mode.
-- **Identity**: Consistent branding (Layer Group Icon, "DISCOVERY PRO" typography) across Login, Sidebar, and Headers.
+- **Theme**: "PRISM" Dark Mode.
+- **Identity**: Consistent branding (Layer Group Icon, "PRISM" typography) across Login, Sidebar, and Headers.
 
 ---
 

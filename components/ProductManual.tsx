@@ -97,7 +97,7 @@ const ProductManual: React.FC<ProductManualProps> = ({ onClose }) => {
                 <span className="text-3xl font-black text-indigo-500/50">01.</span>
                 <h3 className="text-2xl font-black text-white uppercase tracking-tight">Strategic Baseline (Global Context)</h3>
               </div>
-              <p className="text-slate-400 leading-relaxed">The Discovery Pro workspace features an optional global configuration. This baseline acts as the "North Star" for the AI agents, ensuring every output—from Market Research to Backlog—is perfectly aligned with your business identity.</p>
+              <p className="text-slate-400 leading-relaxed">The PRISM workspace features an optional global configuration. This baseline acts as the "North Star" for the AI agents, ensuring every output—from Market Research to Backlog—is perfectly aligned with your business identity.</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {[
                   { l: "Company Persona", d: "Sets the corporate tone and historical context." },
@@ -157,7 +157,7 @@ const ProductManual: React.FC<ProductManualProps> = ({ onClose }) => {
                 <span className="text-3xl font-black text-indigo-500/50">03.</span>
                 <h3 className="text-2xl font-black text-white uppercase tracking-tight">Multimodal Context Engine</h3>
               </div>
-              <p className="text-slate-400 leading-relaxed">Unlike basic text-in text-out tools, Discovery Pro features a high-bandwidth ingestion pipeline for multiple media types.</p>
+              <p className="text-slate-400 leading-relaxed">Unlike basic text-in text-out tools, PRISM features a high-bandwidth ingestion pipeline for multiple media types.</p>
               <ul className="space-y-4">
                 <li className="flex gap-4">
                   <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0"><i className="fas fa-image text-indigo-400"></i></div>

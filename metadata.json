@@ -1,5 +1,5 @@
 {
-  "name": "[Main] Product Discovery Accelerator Pro",
+  "name": "PRISM",
   "description": "Enterprise-grade agentic workflow for product discovery. Multimodal analysis for Market Research, BOD, KPIs, and Epics.",
   "requestFramePermissions": [
     "camera",

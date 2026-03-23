@@ -103,10 +103,10 @@ export function createLiveAssistant(handlers: LiveHandlers, currentQuestions: st
     ? `The current refinement questions available for this module are:\n${currentQuestions.map((q, i) => `${i}: ${q}`).join('\n')}`
     : "There are currently no refinement questions for this stage.";
 
-  const systemInstruction = `You are the PRSIM.AI Material + Discovery Assistant, an expert Talking Guide for this application.
+  const systemInstruction = `You are the PRISM.AI Material + Discovery Assistant, an expert Talking Guide for this application.
   
   APP KNOWLEDGE BASE:
-  - **Purpose**: PRSIM.AI helps users structurally discover and define product requirements through 4 key stages: DOMAIN, BOD (Business on Domain), KPI, and EPICS.
+  - **Purpose**: PRISM.AI helps users structurally discover and define product requirements through 4 key stages: MARKET_RESEARCH (formerly DOMAIN), BOD (Business on Domain), KPI, and EPICS.
   - **Your Role**: You are a dual-purpose assistant:
     1. **Data Entry**: You actively listen to user ideas and populate the relevant fields (Main Input or specific Answers) using your tools.
     2. **Guide/Tutor**: You explain how the app works, what each feature does, and guide the user through the process.
