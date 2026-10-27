@@ -105,6 +105,12 @@ const App: React.FC = () => {
 
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
+
+  useEffect(() => {
+    setAvatarError(false);
+  }, [user?.uid]);
+
   const [state, setState] = useState<AppState>(INITIAL_STATE);
   const [analyzingStage, setAnalyzingStage] = useState<DiscoveryStage | null>(null);
   const [statusIdx, setStatusIdx] = useState(0);
@@ -2095,8 +2101,13 @@ ${confluenceCapture}
           onClick={() => setShowProjectList(true)}
           title={isCollapsed ? user?.displayName || 'User' : undefined}
         >
-          {user?.photoURL ? (
-            <img src={user.photoURL} alt="User" className="w-8 h-8 rounded-full border border-slate-600 shrink-0" />
+          {user?.photoURL && !avatarError ? (
+            <img
+              src={user.photoURL}
+              alt="User"
+              className="w-8 h-8 rounded-full border border-slate-600 shrink-0"
+              onError={() => setAvatarError(true)}
+            />
           ) : (
             <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold border border-indigo-400 shrink-0">
               {user?.displayName ? user.displayName.charAt(0).toUpperCase() : 'U'}
